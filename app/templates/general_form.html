@@ -2,7 +2,7 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>GUAVA File Pool</title>
+    <title>Praat++ File Pool</title>
     <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css">
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js"></script>
     <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js"></script>
@@ -24,7 +24,7 @@
                 <li>All changes are auto-saved and can be exported as a Praat-compatible <b>.TextGrid</b>.</li>
             </ul>
             <p> Full features:
-                <a href="https://youtu.be/-rjM8eFayUA?si=m4QV_mgjR4PtuXXV" target="_blank" rel="noopener">GUAVA Tutorial</a>
+                <a href="https://youtu.be/-rjM8eFayUA?si=m4QV_mgjR4PtuXXV" target="_blank" rel="noopener">Praat++ Tutorial</a>
             </p>
         </div>
         <form action="{{ URL_PREFIX + url_for('upload.upload_files') }}" method="post" enctype="multipart/form-data" id="runForm">
@@ -39,6 +39,13 @@
                     color: white;
                     cursor: pointer;
                     border-radius: 5px;">Upload</button>
+                <button type="button" id="exportButton" title="Export all labeled files" style="padding: 5px 10px;
+                    margin: 0 5px;
+                    border: none;
+                    background: #007bff;
+                    color: white;
+                    cursor: pointer;
+                    border-radius: 5px;">Export All</button>
             </div>
         </form>
         <div class="file-header">
@@ -174,6 +181,30 @@
             }
         });
 
+        document.getElementById('exportButton').addEventListener('click', async () => {
+            try {
+                const res = await fetch(`{{ URL_PREFIX }}/export_all_annotations?username=${username}`);
+                if (!res.ok) {
+                    const err = await res.json();
+                    alert(err.error || "Export failed!");
+                    return;
+                }
+                const blob = await res.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `${username}_all_annotations.json`;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                window.URL.revokeObjectURL(url);
+                alert("Export succeeded!");
+            } catch (err) {
+                console.error(err);
+                alert("Error exporting annotations!");
+            }
+        });
+
         document.addEventListener("DOMContentLoaded", () => {
             const poolContainer = document.getElementById("poolContainer");
             const fileList = document.getElementById("fileList");
@@ -182,10 +213,29 @@
             const nextPageBtn = document.getElementById("nextPage");
             const pageInfo = document.getElementById("pageInfo");
 
-            let currentPage = 1;
+            let totalPages;
             const itemsPerPage = 10;
             let fileData = [];
-            let currentSort = { key: null, asc: true };
+
+            let savedState = null;
+            try {
+                savedState = JSON.parse(sessionStorage.getItem("pool_state"));
+            } catch (e) {}
+
+            let currentPage = savedState?.page || 1;
+            let currentSort = {
+                key: savedState?.sort_key || null,
+                asc: (savedState?.order || "asc") === "asc"
+            };
+
+            function saveState() {
+                const state = {
+                    page: currentPage,
+                    sort_key: currentSort.key,
+                    order: currentSort.asc ? "asc" : "desc"
+                };
+                sessionStorage.setItem("pool_state", JSON.stringify(state));
+            }
 
             // Corresponding key mapping
             const keyMap = {
@@ -197,10 +247,19 @@
                 lastAnnotationSaveTime: "lastAnnotationSaveTime"
             };
 
-            // Request the server to get the user's files
-            fetch(`{{URL_PREFIX}}/${username}/files`)
-                .then(response => response.json())
-                .then(data => {
+            async function loadPage(page = 1) {
+                try {
+                    const sortParam = currentSort.key
+                        ? `&sort_key=${currentSort.key}&order=${currentSort.asc ? "asc" : "desc"}`
+                        : "";
+                    const response = await fetch(
+                        `{{URL_PREFIX}}/${username}/files?page=${page}&per_page=${itemsPerPage}${sortParam}`
+                    );
+                    if (!response.ok) {
+                        console.error("Server responded with", response.status);
+                        return;
+                    }
+                    const data = await response.json();
                     if (data.error) {
                         alert("User not found or no files available.");
                         return;
@@ -210,41 +269,20 @@
                         ...file,
                         originalIndex: index // Preserve original order
                     }));
-                    currentPage = 1; // Reset page number when reloading data
+                    totalPages = data.total_pages || 1;
+                    currentPage = data.current_page || 1;
                     renderPage();
                     poolContainer.style.display = "block";
-                })
-                .catch(error => console.error("Error loading files:", error));
-
-            function sortFileData(key, asc) {
-                fileData.sort((a, b) => {
-                    const valA = getValue(a, key);
-                    const valB = getValue(b, key);
-                    if (valA < valB) return asc ? -1 : 1;
-                    if (valA > valB) return asc ? 1 : -1;
-                    return 0;
-                });
-            }
-
-            // Used to extract comparison value
-            function getValue(file, key) {
-                if (key === "name") return file.name.toLowerCase();
-                if (key === "type") return file.type.toLowerCase();
-                if (key === "status") return file.status === "Annotated" ? 1 : 0;
-                if (key === "duration") return parseFloat(file.duration);
-                if (key === "size") return parseFloat(file.size);
-                if (key === "lastAnnotationSaveTime") return file.lastAnnotationSaveTime === "----" ? 0 : new Date(file.lastAnnotationSaveTime).getTime(); // Potential iOS risk: "%Y-%m-%d %H:%M:%S" is not ISO 8601, may fail in Safari.
-                return file.name;
+                    saveState();
+                } catch (error) {
+                    console.error("Error loading files:", error);
+                }
             }
 
             // Render files on the current page
             function renderPage() {
                 fileList.innerHTML = ""; // Clear old file list
-                const start = (currentPage - 1) * itemsPerPage;
-                const end = start + itemsPerPage;
-                const pageItems = fileData.slice(start, end); // Get data for the current page
-
-                pageItems.forEach(file => {
+                fileData.forEach(file => {
                     let fileItem = document.createElement("li");
                     fileItem.classList.add("file-item");
 
@@ -301,7 +339,6 @@
 
             // Update pagination button status
             function updatePaginationControls() {
-                const totalPages = Math.ceil(fileData.length / itemsPerPage);
                 pageInfo.textContent = `Page ${currentPage} of ${totalPages}`;
                 prevPageBtn.disabled = currentPage === 1;
                 nextPageBtn.disabled = currentPage >= totalPages;
@@ -310,42 +347,39 @@
             // Listen to "Previous" button
             prevPageBtn.addEventListener("click", function () {
                 if (currentPage > 1) {
-                    currentPage--;
-                    renderPage();
+                    currentPage -= 1;
+                    loadPage(currentPage);
                 }
             });
 
             // Listen to "Next" button
             nextPageBtn.addEventListener("click", function () {
-                if (currentPage < Math.ceil(fileData.length / itemsPerPage)) {
-                    currentPage++;
-                    renderPage();
+                if (currentPage < totalPages) {
+                    currentPage += 1;
+                    loadPage(currentPage);
                 }
             });
 
             document.querySelectorAll(".sortable").forEach(col => {
-                const key = col.classList[1]; // "type", "status", "duration", "size"
-                const actualKey = keyMap[key]; // Map to actual field
+                const key = col.classList[1];
+                const actualKey = keyMap[key];
 
                 col.addEventListener("click", () => {
                     if (currentSort.key === actualKey) {
                         if (currentSort.asc) {
                             currentSort.asc = false;
-                        } else {
-                            currentSort.key = null;
-                            fileData.sort((a, b) => a.originalIndex - b.originalIndex); // Restore original order
-                            updateSortIcons(); // Clear sorting arrows
-                            renderPage();
-                            return;
+                        }
+                        else {
+                            currentSort = { key: null, asc: true };
                         }
                     } else {
                         currentSort = { key: actualKey, asc: true };
                     }
-                    sortFileData(currentSort.key, currentSort.asc);
                     updateSortIcons();
-                    renderPage();
+                    loadPage(1);
                 });
             });
+
             function updateSortIcons() {
                 document.querySelectorAll(".sort-arrow").forEach(arrow => arrow.classList.remove("active"));
                 if (!currentSort.key) return;
@@ -355,6 +389,7 @@
                 const arrow = col.querySelector(`.sort-arrow.${currentSort.asc ? 'up' : 'down'}`);
                 if (arrow) arrow.classList.add("active");
             }
+            loadPage(currentPage);
         });
 
         document.addEventListener("DOMContentLoaded", function () {

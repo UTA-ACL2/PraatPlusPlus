@@ -9,7 +9,7 @@
     <link href="{{ URL_PREFIX + url_for('static', filename='css/general.css') }}" rel="stylesheet" type="text/css"/>
     <link href="{{ URL_PREFIX + url_for('static', filename='css/annotation.css') }}" rel="stylesheet" type="text/css"/>
     <link href="{{ URL_PREFIX + url_for('static', filename='css/category.css') }}" rel="stylesheet" type="text/css"/>
-    <title>GUAVA Workspace</title>
+    <title>Praat++ Workspace</title>
 </head>
 <body class="bg-color0">
 <div class="container">
@@ -20,7 +20,7 @@
         <div style="display: flex">
             <div style="flex: 1; min-width: 150px; text-align: left;">
                 <p><strong>User:</strong> {{ userName }}</p>
-                <p><strong>File:</strong> {{ fileName }}</p>
+                <p style="word-break: break-all;"><strong>File:</strong> {{ fileName }}</p>
                 <p><strong>Tiers:</strong> <span id="tierCount">0</span></p>
                 <p><strong>Total Annotations:</strong> <span id="annotationCount">0</span></p>
             </div>

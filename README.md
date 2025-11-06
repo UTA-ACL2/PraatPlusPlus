@@ -1,12 +1,12 @@
-# GUAVA (Graphical User Audio-Video Annotator)
+# Praat++ (An extension tool from Praat for web-based multimodal annotation)
 
-A web-based multimodal annotation tool for acoustic and video data
+*Praat++* is a browser-based multimodal annotation platform built on [Praat](https://www.fon.hum.uva.nl/praat/) functionality.
 
-GUAVA is a browser-based annotation platform built on [Praat](https://www.fon.hum.uva.nl/praat/) functionality. It supports real-time waveform, spectrogram, pitch, and intensity visualization. Users can annotate audio and video files directly in the browser with features like region labeling, tier control, and auto-saving.
+It provides real-time waveform, spectrogram, pitch, and intensity visualization, supporting annotation of both acoustic and video data directly in the browser with features like region labeling, tier control, and auto-saving.
 
 ## Example
 
-<img src="app/static/images/demo.png" alt="GUAVA Screenshot" width="800" style="display: block; margin-left: 0;"/>
+<img src="app/static/images/demo2.jpg" alt="Praat++ Screenshot" width="800" style="display: block; margin-left: 0;"/>
 
 ## Key Features
 
@@ -38,7 +38,7 @@ GUAVA is a browser-based annotation platform built on [Praat](https://www.fon.hu
 ### Export
 - Export to TextGrid: Download annotations as a `.TextGrid` file compatible with Praat.
 
-**To explore the full features of GUAVA, please refer to the [GUAVA Tutorial](https://youtu.be/-rjM8eFayUA).**
+**To explore the full features of Praat++, please refer to the [Praat++ Tutorial](https://youtu.be/-rjM8eFayUA).**
 
 ## Annotation Storage
 
@@ -52,13 +52,13 @@ Each uploaded file is saved under the logged-in username, and annotations persis
 
 ## Try It Out
 
-You can run GUAVA locally by following these steps:
+You can run Praat++ locally by following these steps:
 
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/UTA-ACL2/GUAVA.git
-cd GUAVA
+git clone https://github.com/UTA-ACL2/PraatPlusPlus.git
+cd PraatPlusPlus
 ```
 
 ### 2. Create and Activate Virtual Environment
@@ -80,12 +80,6 @@ pip install -r requirements.txt
 ### 4. Set Up External Tools
 
 - Install [`ffmpeg`](https://ffmpeg.org/) and ensure it is added to your system `PATH`
-
-- Download `praat.exe` and set its path in `general_routes.py`:
-
-```python
-PRAAT_LOCATION = "D:/praat.exe"
-```
 
 ### 5. Configure User Accounts
 
@@ -109,4 +103,5 @@ Email: wxz9630@mavs.uta.edu
 ## Acknowledgments
 
 This tool was inspired by the design of *Praat on the Web* (Domínguez et al., 2016).  
-We gratefully acknowledge their contribution to web-based speech annotation platforms.
+We gratefully acknowledge their contribution to web-based speech annotation platforms.  
+*Praat++* is developed by the [ACL Lab at the University of Texas at Arlington (UTA)](https://uta-acl2.github.io/).

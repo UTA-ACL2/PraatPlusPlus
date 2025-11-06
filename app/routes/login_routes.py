@@ -39,6 +39,8 @@ def login():
             #  First login → Save password
             users[username] = generate_password_hash(password)
             save_users(users)
+            user_dir = os.path.join(BASE_DIR, "static", "videos", "pool", username)
+            os.makedirs(user_dir, exist_ok=True)
             session['username'] = username
             return render_template('general_form.html', username=session['username'], message=f"First login. Password set successfully. Please remember it!")
 
