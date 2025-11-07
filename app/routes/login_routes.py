@@ -47,7 +47,7 @@ def login():
             #  Future logins → Verify password
         if check_password_hash(users[username], password):
             session['username'] = username
-            return render_template('general_form.html', username=session['username'])
+            return redirect(URL_PREFIX + url_for('login.general_form'))
         else:
             return render_template('login.html', error="Incorrect password")
 

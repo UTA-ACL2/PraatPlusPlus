@@ -1,8 +1,11 @@
 import os
 import shutil
-from flask import Blueprint, request, jsonify, render_template
+from flask import Blueprint, request, jsonify, render_template, url_for
 from app.config import IS_SERVER, URL_PREFIX
 from app.utils.utils import execute_command
+import parselmouth
+from parselmouth.praat import call
+import numpy as np
 
 general_bp = Blueprint('general', __name__)
 
@@ -26,6 +29,24 @@ def create_directory_if_not_exists(path):
 
 def file_exists(*file_paths):
     return all(os.path.exists(p) for p in file_paths)
+
+def extract_pitch_intensity(audio_path, output_path):
+    snd = parselmouth.Sound(audio_path)
+    pitch = call(snd, "To Pitch", 0.0, 75, 600)
+    intensity = call(snd, "To Intensity", 100.0, 0.0, "yes")
+
+    start_time = max(pitch.xmin, intensity.xmin)
+    end_time = min(pitch.xmax, intensity.xmax)
+    times = np.arange(start_time, end_time, 0.01)
+
+    with open(output_path, "w", encoding="utf-8") as f:
+        f.write("time\tpitch\tintensity\n")
+        for t in times:
+            p = call(pitch, "Get value at time", t, "Hertz", "Linear")
+            i = call(intensity, "Get value at time", t, "Cubic")
+            p_str = "--undefined--" if np.isnan(p) or p <= 0 else f"{p:.2f}"
+            i_str = "--undefined--" if np.isnan(i) or i <= 0 else f"{i:.2f}"
+            f.write(f"{t:.3f}\t{p_str}\t{i_str}\n")
 
 
 @general_bp.route('/general', methods=['GET', 'POST'])
@@ -55,14 +76,9 @@ def general():
 
         # If all three files exist, load them directly
         if file_exists(audio_file_path_mp4, audio_file_path_wav, graph_file_path):
-            return render_template(
-                'viewer.html',
-                audioFile=f"{URL_PREFIX}/static/videos/pool/{username}/annotation/{audio_basename}/{audio_basename}.wav",
-                videoFile=f"{URL_PREFIX}/static/videos/pool/{username}/annotation/{audio_basename}/{audio_basename}.mp4",
-                graphData=f"{URL_PREFIX}/static/videos/pool/{username}/annotation/{audio_basename}/{audio_basename}.graph",
-                fileName=audio_basename,
-                userName=username
-            )
+            return jsonify({
+                "redirect": URL_PREFIX + url_for("general.viewer", username=username, fileName=audio_basename)
+            })
 
         # Otherwise reprocess
         save_file(audio_file, audio_file_path_mp4)
@@ -77,42 +93,58 @@ def general():
             shutil.rmtree(target_dir, ignore_errors=True)
             return jsonify({"error": f"ffmpeg failed: {str(e)}"}), 500
 
+        try:
+            extract_pitch_intensity(audio_file_path_wav, graph_file_path)
+        except Exception as e:
+            print(f"Pitch/Intensity extraction failed: {e}")
+            shutil.rmtree(target_dir, ignore_errors=True)
+            return jsonify({"error": f"Pitch/Intensity extraction failed: {str(e)}"}), 500
+
         # Extract Pitch and Intensity
-        extract_command = [
-            PRAAT_LOCATION, "--run", "--no-pref-files",
-            os.path.join(SCRIPTS_FOLDER, "extractPitchIntensity.praat"),
-            target_dir,
-            audio_basename
-        ]
-        try:
-            execute_command(extract_command, timeout=300)
-        except Exception as e:
-            print(f"extractPitchIntensity.praat failed")
-            shutil.rmtree(target_dir, ignore_errors=True)
-            return jsonify({"error": f"extractPitchIntensity failed: {str(e)}"}), 500
+        # extract_command = [
+        #     PRAAT_LOCATION, "--run", "--no-pref-files",
+        #     os.path.join(SCRIPTS_FOLDER, "extractPitchIntensity.praat"),
+        #     target_dir,
+        #     audio_basename
+        # ]
+        # try:
+        #     execute_command(extract_command, timeout=300)
+        # except Exception as e:
+        #     print(f"extractPitchIntensity.praat failed")
+        #     shutil.rmtree(target_dir, ignore_errors=True)
+        #     return jsonify({"error": f"extractPitchIntensity failed: {str(e)}"}), 500
 
-        pitch_intensity_command = [
-            PRAAT_LOCATION, "--run", "--no-pref-files",
-            os.path.join(SCRIPTS_FOLDER, "pitchIntensityScript.praat"),
-            target_dir,
-            audio_basename
-        ]
-        try:
-            execute_command(pitch_intensity_command, timeout=300)
-        except Exception as e:
-            print(f"pitchIntensityScript.praat failed")
-            shutil.rmtree(target_dir, ignore_errors=True)
-            return jsonify({"error": f"pitchIntensityScript failed: {str(e)}"}), 500
+        # pitch_intensity_command = [
+        #     PRAAT_LOCATION, "--run", "--no-pref-files",
+        #     os.path.join(SCRIPTS_FOLDER, "pitchIntensityScript.praat"),
+        #     target_dir,
+        #     audio_basename
+        # ]
+        # try:
+        #     execute_command(pitch_intensity_command, timeout=300)
+        # except Exception as e:
+        #     print(f"pitchIntensityScript.praat failed")
+        #     shutil.rmtree(target_dir, ignore_errors=True)
+        #     return jsonify({"error": f"pitchIntensityScript failed: {str(e)}"}), 500
 
-        # Return to the Viewer page
-        return render_template(
-            'viewer.html',
-            audioFile=f"{URL_PREFIX}/static/videos/pool/{username}/annotation/{audio_basename}/{audio_basename}.wav",
-            videoFile=f"{URL_PREFIX}/static/videos/pool/{username}/annotation/{audio_basename}/{audio_basename}.mp4",
-            graphData=f"{URL_PREFIX}/static/videos/pool/{username}/annotation/{audio_basename}/{audio_basename}.graph",
-            fileName=audio_basename,
-            userName=username
-        )
+        return jsonify({
+            "redirect": URL_PREFIX + url_for("general.viewer", username=username, fileName=audio_basename)
+        })
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+@general_bp.route("/viewer")
+def viewer():
+    username = request.args.get("username")
+    file_name = request.args.get("fileName")
+    base = f"{URL_PREFIX}/static/videos/pool/{username}/annotation/{file_name}/{file_name}"
+    return render_template(
+        "viewer.html",
+        audioFile=f"{base}.wav",
+        videoFile=f"{base}.mp4",
+        graphData=f"{base}.graph",
+        fileName=file_name,
+        userName=username
+    )

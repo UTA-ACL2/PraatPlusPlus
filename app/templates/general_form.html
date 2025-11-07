@@ -150,7 +150,7 @@
                         // Automatically generate bark_2, bark_3, ... until a unique name is found
                         let index = 2;
                         while (true) {
-                            const newName = `${baseName}__${index}`;
+                            const newName = `${baseName}_${index}`;
                             const check = await fetch(`{{URL_PREFIX}}/check_file_exists?username=${username}&videoName=${newName}`);
                             const { exists: existsAlt } = await check.json();
                             if (!existsAlt) {
@@ -401,44 +401,64 @@
                     target = target.parentElement;
                 }
                 if (target) {
-                    // Get only filenames from the .name column
-                    const fileName = target.querySelector(".name").textContent.trim();
-                    {#console.log("Selected file:", fileName);#}
+                    document.body.style.cursor = 'wait';
+                    target.style.opacity = '0.6';
+                    target.style.pointerEvents = 'none';
 
-                    const fileName2 = fileName.split(".")[0];  // Removes file extension
+                    try {
+                        // Get only filenames from the .name column
+                        const fileName = target.querySelector(".name").textContent.trim();
+                        {#console.log("Selected file:", fileName);#}
+                        const fileName2 = fileName.split(".")[0];  // Removes file extension
+                        const lockRes = await fetch(`{{URL_PREFIX}}/lock_file`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ username: username, filename: fileName2 })
+                        });
+                        const lockData = await lockRes.json();
+                        if (!lockData.success) {
+                            alert("This file is currently being used by another session.");
+                            return;
+                        }
 
-                    const lockRes = await fetch(`{{URL_PREFIX}}/lock_file`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ username: username, filename: fileName2 })
-                    });
-                    const lockData = await lockRes.json();
-                    if (!lockData.success) {
-                        alert("This file is currently being used by another session.");
-                        return;
+                        // Read file content
+                        const fileResponse = await fetch(`{{URL_PREFIX}}/static/videos/pool/${username}/${fileName}`); // Read file
+                        const fileBlob = await fileResponse.blob(); // Convert to Blob
+                        // Create a `File` object (simulate user upload)
+                        const selectedFile = new File([fileBlob], fileName, { type: "video/mp4" });
+                        // Use FormData to send file data
+                        const formData = new FormData();
+                        formData.append("audioFile", selectedFile);
+                        formData.append("username", username);
+                        // Send to Flask and redirect
+                        const response = await fetch("{{ URL_PREFIX + url_for('general.general') }}", {
+                            method: "POST",
+                            body: formData,
+                            credentials: "same-origin"  // ensure Flask session cookies are sent
+                        });
+                        if (response.redirected) {
+                            window.location.href = response.url;
+                        } else {
+                            try {
+                                const data = await response.json();
+                                if (data.redirect) {
+                                    window.location.href = data.redirect;
+                                } else if (response.redirected) {
+                                    window.location.href = response.url;
+                                } else if (data.error) {
+                                    alert(data.error);
+                                } else {
+                                    console.warn("No redirect or error in response:", data);
+                                }
+                            } catch (err) {
+                                console.error("Unexpected response format:", err);
+                            }
+                        }
+                    } finally {
+                        document.body.style.cursor = 'default';
+                        target.style.opacity = '1';
+                        target.style.pointerEvents = 'auto';
                     }
-
-                    // Read file content
-                    const fileResponse = await fetch(`{{URL_PREFIX}}/static/videos/pool/${username}/${fileName}`); // Read file
-                    const fileBlob = await fileResponse.blob(); // Convert to Blob
-                    // Create a `File` object (simulate user upload)
-                    const selectedFile = new File([fileBlob], fileName, { type: "video/mp4" });
-                    // Use FormData to send file data
-                    const formData = new FormData();
-                    formData.append("audioFile", selectedFile);
-                    formData.append("username", username);
-                    // Send to Flask and redirect
-                    fetch("{{ URL_PREFIX + url_for('general.general') }}", {
-                        method: "POST",
-                        body: formData
-                    })
-                        .then(response => response.text())  // Parse HTML
-                        .then(html => {
-                            document.open();
-                            document.write(html);
-                            document.close();
-                        })
-                        .catch(error => console.error("Error:", error));
                 }
             });
         });
