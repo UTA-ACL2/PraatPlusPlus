@@ -1,6 +1,7 @@
-from flask import Blueprint, jsonify, request, session
+from flask import Blueprint, jsonify, request
 import os
 import json
+from app.utils.utils import get_username, get_user_folder_path
 
 category_bp = Blueprint("custom_categories", __name__)
 
@@ -15,7 +16,8 @@ def save_custom_category():
     category = data["category"]
     options = data["options"]
 
-    custom_path = os.path.join(BASE_DIR, "static", "videos", "pool", username, "custom_categories.json")
+    user_folder_path = get_user_folder_path()
+    custom_path = os.path.join(user_folder_path, "custom_categories.json")
 
     # Read existing category information
     if os.path.exists(custom_path):
@@ -39,8 +41,8 @@ def save_custom_category():
 @category_bp.route("/load_custom_categories", methods=["GET"])
 def load_custom_categories():
     """Load user saved Categories"""
-    username = request.args.get("username")
-    custom_path = os.path.join(BASE_DIR, "static", "videos", "pool", username, "custom_categories.json")
+    user_folder_path = get_user_folder_path()
+    custom_path = os.path.join(user_folder_path, "custom_categories.json")
 
     if os.path.exists(custom_path):
         with open(custom_path, "r", encoding="utf-8") as f:
@@ -55,13 +57,14 @@ def load_custom_categories():
 def delete_custom_category():
     """Delete the specified category"""
     data = request.json
-    username = session['username']
+    username = get_username()
     category_to_delete = data.get("category")
 
     if not username or not category_to_delete:
         return jsonify({"status": "error", "message": "Missing username or category"}), 400
 
-    custom_path = os.path.join(BASE_DIR, "static", "videos", "pool", username, "custom_categories.json")
+    user_folder_path = get_user_folder_path()
+    custom_path = os.path.join(user_folder_path, "custom_categories.json")
 
     # Check if the JSON exists
     if not os.path.exists(custom_path):

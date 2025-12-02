@@ -32,13 +32,15 @@ def save_locks(locks):
 # Locking logic
 def lock_file(username, filename):
     ensure_session_id()
+    folder = session.get("current_folder")
     locks = load_locks()
     user_locks = locks.get(username, {})
-    if filename in user_locks:
-        if user_locks[filename] == session['session_id']:
+    lock_key = f"{folder}/{filename}"
+    if lock_key in user_locks:
+        if user_locks[lock_key] == session['session_id']:
             return True  # Already locked by self
         return False     # Locked by someone else
-    user_locks[filename] = session['session_id']
+    user_locks[lock_key] = session['session_id']
     locks[username] = user_locks
     save_locks(locks)
     return True
@@ -47,10 +49,12 @@ def lock_file(username, filename):
 # Unlocking logic
 def unlock_file(username, filename):
     ensure_session_id()
+    folder = session.get("current_folder")
     locks = load_locks()
     user_locks = locks.get(username, {})
-    if filename in user_locks and user_locks[filename] == session['session_id']:
-        del user_locks[filename]
+    lock_key = f"{folder}/{filename}"
+    if lock_key in user_locks and user_locks[lock_key] == session['session_id']:
+        del user_locks[lock_key]
         locks[username] = user_locks
         save_locks(locks)
         return True

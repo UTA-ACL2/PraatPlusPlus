@@ -1,10 +1,11 @@
-from flask import Blueprint, jsonify, request, Response
+from flask import Blueprint, jsonify, request, Response, session
 import time
 import os
+import re
 import subprocess
 import json
 import shutil
-from app.utils.utils import update_user_cache
+from app.utils.utils import update_user_cache, get_username, get_user_folder_path
 
 pool_bp = Blueprint("pool_routes", __name__)  # Create Blueprint
 
@@ -32,7 +33,7 @@ def get_video_duration(file_path):
 def get_user_files(username):
     """Get user's video/audio file list (with pagination + sorting + cache)"""
     username = username.lower()
-    folder = os.path.join(POOL_DIR, username)
+    folder = get_user_folder_path()
     annotation_folder = os.path.join(folder, "annotation")
     cache_path = os.path.join(folder, "pool_metadata.json")
 
@@ -57,6 +58,18 @@ def get_user_files(username):
     all_files = os.listdir(folder)
     media_files = [f for f in all_files if os.path.splitext(f)[1].lower() in allowed_extensions]
     files_info = []
+
+    def is_annotated_data(data):
+        """A file is considered annotated if ANY tier contains at least one interval."""
+        if not isinstance(data, list):
+            return False
+
+        for tier in data:
+            tier_data = tier.get("data", [])
+            if isinstance(tier_data, list) and len(tier_data) > 0:
+                return True
+
+        return False
 
     for file_name in media_files:
         # Try reading from cache
@@ -85,7 +98,8 @@ def get_user_files(username):
             try:
                 with open(annotation_path, "r", encoding="utf-8") as f:
                     data = json.load(f)
-                    if isinstance(data, list) and len(data) > 0:
+                    # if isinstance(data, list) and len(data) > 0:
+                    if is_annotated_data(data):
                         is_annotated = True
                 mtime = os.path.getmtime(annotation_path)
                 last_annotation_save_time = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(mtime))
@@ -152,9 +166,9 @@ def delete_user_file():
     if not username or not filename:
         return jsonify(success=False, error="Missing username or filename"), 400
 
-    user_folder = os.path.join(POOL_DIR, username)
-    file_path = os.path.join(user_folder, filename)
-    annotation_folder = os.path.join(user_folder, "annotation", os.path.splitext(filename)[0])
+    user_folder_path = get_user_folder_path()
+    file_path = os.path.join(user_folder_path, filename)
+    annotation_folder = os.path.join(user_folder_path, "annotation", os.path.splitext(filename)[0])
 
     try:
         # Delete video/audio files
@@ -177,11 +191,12 @@ def delete_user_file():
 @pool_bp.route('/export_all_annotations', methods=['GET'])
 def export_all_annotations():
     """Export all non-empty annotations for a user into a single JSON file."""
-    username = request.args.get("username")
+    username = get_username()
     if not username:
         return jsonify({"error": "Missing username"}), 400
 
-    user_annotation_dir = os.path.join(POOL_DIR, username, "annotation")
+    user_folder_path = get_user_folder_path()
+    user_annotation_dir = os.path.join(user_folder_path, "annotation")
     if not os.path.exists(user_annotation_dir):
         return jsonify({"error": "No annotations found for this user"}), 404
 
@@ -214,3 +229,82 @@ def export_all_annotations():
 
     print(f"[INFO] Exported {len(all_annotations)} valid annotations, skipped {skipped_files} empty files.")
     return response
+
+@pool_bp.route('/pool/folders', methods=['GET'])
+def get_user_folders():
+    username = get_username()
+    if not username:
+        return jsonify({"success": False, "error": "Not logged in"}), 401
+
+    user_dir = os.path.join(POOL_DIR, username)
+
+    if not os.path.exists(user_dir):
+        return jsonify({"success": False, "error": f"User path '{username}' not found"}), 404
+
+    folders = [
+        name
+        for name in os.listdir(user_dir)
+        if os.path.isdir(os.path.join(user_dir, name))
+    ]
+
+    folders.sort(key=lambda x: x.lower())
+
+    return jsonify({
+        "success": True,
+        "username": username,
+        "folders": folders,
+        "current_folder": session.get("current_folder")
+    })
+
+
+@pool_bp.route('/switch_folder', methods=['POST'])
+def switch_folder():
+    data = request.get_json()
+    folder = data.get("folderNameNew")
+
+    if not folder:
+        return jsonify(success=False, error="Missing folder name"), 400
+
+    session['current_folder'] = folder
+    return jsonify(success=True)
+
+
+def safe_folder_name(name: str) -> str:
+    name = name.strip()
+    if not name:
+        return "untitled"
+
+    name = re.sub(r"[^\w\u4e00-\u9fff]", "_", name)
+    name = re.sub(r"_+", "_", name)
+    name = name.strip("_")
+
+    return name or "untitled"
+
+
+@pool_bp.route('/create_folder', methods=['POST'])
+def create_folder():
+    """Create a new folder under user's directory"""
+    data = request.get_json()
+    username = get_username()
+    if not username:
+        return jsonify({"success": False, "error": "Not logged in"}), 401
+
+    folder_name = data.get("folderName")
+    user_dir = os.path.join(POOL_DIR, username)
+
+    if not username or not folder_name:
+        return jsonify({"success": False, "error": "Missing username or folderName"}), 400
+
+    # Clean folder name
+    folder_name = safe_folder_name(folder_name)
+    new_folder_path = os.path.join(user_dir, folder_name)
+
+    try:
+        if os.path.exists(new_folder_path):
+            return jsonify({"success": False, "error": "Folder already exists"}), 409
+
+        os.makedirs(new_folder_path, exist_ok=True)
+
+        return jsonify({"success": True, "folder": folder_name})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500

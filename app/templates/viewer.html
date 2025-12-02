@@ -26,7 +26,8 @@
             </div>
             <div style="display: flex; flex-direction: column; margin-left: 20px; gap: 10px;">
                 <a href="{{ URL_PREFIX + url_for('login.logout') }}" class="btn btn-primary">Logout</a>
-                <a href="{{ URL_PREFIX + url_for('login.general_form') }}" class="btn btn-primary">Back</a>
+{#                <a href="{{ URL_PREFIX + url_for('login.general_form') }}" class="btn btn-primary">Back</a>#}
+                <button id="backButton" class="btn btn-primary">Back</button>
             </div>
             <!-- Right-side video display area -->
             <div style="flex: 2;">
@@ -167,6 +168,20 @@
                 <li><label><input type="checkbox" value="aggressive"> Aggressive</label></li>
                 <li><label><input type="checkbox" value="attention-seeking"> Seeking Attention</label></li>
             </ul>
+
+            <div class="confidence-block">
+                <div class="meta-header">Confidence</div>
+{#                <div class="meta-item">#}
+{#                    <label><input type="radio" name="confidence" value=""> Not set (blue)</label>#}
+{#                </div>#}
+                <div class="meta-item">
+                    <label><input type="radio" name="confidence" value="0"> No confidence (red)</label>
+                </div>
+                <div class="meta-item">
+                    <label><input type="radio" name="confidence" value="1"> Confident (green)</label>
+                </div>
+            </div>
+
             <div class ="category-btn" style="display: flex;
   justify-content: space-between;
   gap: 8px; padding: 0 8px;">
@@ -262,12 +277,12 @@
 <script src="//d3js.org/d3.v3.js"></script>
 <script type="module">
 
-    {#import WaveSurfer from 'https://unpkg.com/wavesurfer.js@7.10.1/dist/wavesurfer.esm.js'#}
+    {#import WaveSurfer from 'https://unpkg.com/wavesurfer.js@7.11.1/dist/wavesurfer.esm.js'#}
     {#import Spectrogram from 'https://unpkg.com/wavesurfer.js@7.10.1/dist/plugins/spectrogram.esm.js'#}
-    {#import TimelinePlugin from 'https://unpkg.com/wavesurfer.js@7.10.1/dist/plugins/timeline.esm.js'#}
-    {#import RegionsPlugin from 'https://unpkg.com/wavesurfer.js@7.10.1/dist/plugins/regions.esm.js'#}
-    {#import ZoomPlugin from 'https://unpkg.com/wavesurfer.js@7.10.1/dist/plugins/zoom.esm.js'#}
-    {#import Hover from 'https://unpkg.com/wavesurfer.js@7.10.1/dist/plugins/hover.esm.js'#}
+    {#import TimelinePlugin from 'https://unpkg.com/wavesurfer.js@7.11.1/dist/plugins/timeline.esm.js'#}
+    {#import RegionsPlugin from 'https://unpkg.com/wavesurfer.js@7.11.1/dist/plugins/regions.esm.js'#}
+    {#import ZoomPlugin from 'https://unpkg.com/wavesurfer.js@7.11.1/dist/plugins/zoom.esm.js'#}
+    {#import Hover from 'https://unpkg.com/wavesurfer.js@7.11.1/dist/plugins/hover.esm.js'#}
     import Spectrowindow from 'https://unpkg.com/wavesurfer.js@7.10.1/dist/plugins/spectrogram-windowed.esm.js'
 
     import WaveSurfer from "{{ URL_PREFIX + url_for('static', filename='js/wavesurfer.esm.js') }}"
@@ -430,11 +445,73 @@
         {#const spectrogramDiv = wavesurfer.getWrapper().parentElement.nextElementSibling;#}
         const pitchDiv = document.getElementById('chart');
         [ pitchDiv].forEach(c => c?.querySelectorAll('.region-overlay')?.forEach(e => e.remove()));
+        document.querySelectorAll(".interval").forEach((interval) => {
+            {#interval.style.backgroundColor = "rgba(173, 216, 230, 0.6)"; // blue#}
+            applyConfidenceColor(interval, interval.dataset.confidence);
+        });
     })
 
     regions.enableDragSelection({
         color: 'rgba(255, 0, 0, 0.1)',
     })
+    // Restrict region movement and resizing to the gap between neighboring intervals.
+    function installGapClamp(regions, selectedTier, wavesurfer) {
+        const sample = regions.getRegions()[0];
+        if (!sample) return;
+        const proto = sample.constructor.prototype;
+        if (!proto._onUpdate) return;
+        const orig = proto._onUpdate;
+
+        proto._onUpdate = function(dx, side) {
+            const parent = this.element?.parentElement;
+            if (!parent) return;
+            const { width } = parent.getBoundingClientRect();
+            const deltaSec = (dx / width) * this.totalDuration;
+            const intervals = Array.from(selectedTier.querySelectorAll('.interval'))
+                .filter(div => div.id !== this.id)
+                .map(div => ({
+                    start: parseFloat(div.dataset.start),
+                    end:   parseFloat(div.dataset.end),
+                }))
+                .sort((a, b) => a.start - b.start);
+            const duration = wavesurfer.getDuration();
+            const len = this.end - this.start;
+            let prevEnd = 0;
+            let nextStart = duration;
+            for (const seg of intervals) {
+                if (seg.end <= this.start) prevEnd = seg.end;
+                if (seg.start >= this.end) { nextStart = seg.start; break; }
+            }
+            if (!side) {
+                let newStart = this.start + deltaSec;
+                newStart = Math.max(newStart, prevEnd);
+                newStart = Math.min(newStart, nextStart - len);
+                this.start = newStart;
+                this.end   = newStart + len;
+                this.renderPosition();
+                this.emit("update", side);
+                return;
+            }
+            if (side === "start") {
+                let newStart = this.start + deltaSec;
+                newStart = Math.max(newStart, prevEnd);
+                newStart = Math.min(newStart, this.end - this.minLength);
+                this.start = newStart;
+                this.renderPosition();
+                this.emit("update", side);
+                return;
+            }
+            if (side === "end") {
+                let newEnd = this.end + deltaSec;
+                newEnd = Math.min(newEnd, nextStart);
+                newEnd = Math.max(newEnd, this.start + this.minLength);
+                this.end = newEnd;
+                this.renderPosition();
+                this.emit("update", side);
+                return;
+            }
+        };
+    }
 
     regions.on('region-created', (region) => {
         regions.getRegions().forEach(existingRegion => {
@@ -442,10 +519,101 @@
                 existingRegion.remove(); // Remove other regions
             }
         });
+        if(selectedTier && selectedTier.dataset.category) {
+            // Disable drag and resize when the region fully occupies the gap between its neighboring intervals
+            const intervals = Array.from(selectedTier.querySelectorAll('.interval'))
+                .map(div => ({
+                    start: parseFloat(div.dataset.start),
+                    end: parseFloat(div.dataset.end),
+                }))
+                .sort((a, b) => a.start - b.start);
+            const prevSeg = intervals.findLast(seg => seg.end <= region.start);
+            const nextSeg = intervals.find(seg => seg.start >= region.end);
+            const prevEnd = prevSeg ? prevSeg.end : 0;
+            const nextStart = nextSeg ? nextSeg.start : wavesurfer.getDuration();
+            const bothTouching =
+                region.start === prevEnd &&
+                region.end === nextStart;
+            if (bothTouching) {
+                region.setOptions({
+                    drag: false,
+                    resize: false,
+                });
+            }
+
+            installGapClamp(regions, selectedTier, wavesurfer);
+            {#region.on("click", () => console.log("Clicked", region.id));#}
+            {#region.on("update", () => console.log("Dragging single region"));#}
+        }
         if(selectedTier && selectedTier.dataset.category && !isintervalSelecting){
-            const data = {type: 'interval', start: region.start, end: region.end, id: region.id};
+            {#const data = {type: 'interval', start: region.start, end: region.end, id: region.id};#}
             {#console.log('data',data)#}
-            addAnnotation(selectedTier, data);
+            {#addAnnotation(selectedTier, data);#}
+
+            const intervals = Array.from(selectedTier.querySelectorAll('.interval'))
+                .map(div => ({
+                    start: parseFloat(div.dataset.start),
+                    end: parseFloat(div.dataset.end),
+                }))
+                .sort((a, b) => a.start - b.start);
+            const SNAP_TOLERANCE = 0.02;
+            const duration = wavesurfer.getDuration();
+            const regionStart = region.start;
+            const regionEnd = region.end;
+            let snappedStart = null;
+            let snappedEnd = null;
+            let invalid = false;
+            for (const seg of intervals) {
+                if (regionStart >= seg.start && regionEnd <= seg.end) {
+                    invalid = true;
+                    break;
+                }
+            }
+            if (!invalid) {
+                for (let i = 0; i <= intervals.length; i++) {
+                    const prevEnd = i === 0 ? 0 : intervals[i - 1].end;
+                    const nextStart = i === intervals.length ? duration : intervals[i].start;
+                    if (regionEnd <= prevEnd) continue;
+                    if (regionStart >= nextStart) continue;
+                    snappedStart = Math.max(regionStart, prevEnd);
+                    snappedEnd = Math.min(regionEnd, nextStart);
+                    if (snappedEnd <= snappedStart) {
+                        invalid = true;
+                        break;
+                    }
+                    if (Math.abs(snappedStart - prevEnd) < SNAP_TOLERANCE) snappedStart = prevEnd;
+                    if (Math.abs(snappedEnd - nextStart) < SNAP_TOLERANCE) snappedEnd = nextStart;
+                    break;
+                }
+            }
+            if (!invalid && snappedStart !== null && snappedEnd !== null) {
+                region.setOptions({
+                    start: snappedStart,
+                    end: snappedEnd
+                });
+                addAnnotation(selectedTier, {
+                    type: 'interval',
+                    start: snappedStart,
+                    end: snappedEnd,
+                    id: region.id,
+                });
+                // Disable drag and resize when the region fully occupies the gap between its neighboring intervals
+                const prevSeg = intervals.findLast(seg => seg.end <= region.start);
+                const nextSeg = intervals.find(seg => seg.start >= region.end);
+                const prevEnd = prevSeg ? prevSeg.end : 0;
+                const nextStart = nextSeg ? nextSeg.start : duration;
+                const bothTouching =
+                    region.start === prevEnd &&
+                    region.end === nextStart;
+                if (bothTouching) {
+                    region.setOptions({
+                        drag: false,
+                        resize: false,
+                    });
+                }
+            } else {
+                alert('Please avoid overlapping regions.');
+            }
         } else if (!selectedTier) {
             alert('Select Tier！');
         } else if (!selectedTier.dataset.category) {
@@ -465,6 +633,10 @@
             event.preventDefault();
             event.stopPropagation();
             closeAllMenus();
+            const currentConfidence = div.dataset.confidence ?? "1";
+            annotationMenu.querySelectorAll('input[name="confidence"]').forEach(radio => {
+                radio.checked = (radio.value === currentConfidence);
+            });
             const selectedValues = div.dataset.text ? div.dataset.text.split(', ').map(val => val.trim()) : [];
             annotationMenu.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
                 checkbox.checked = selectedValues.includes(checkbox.value);
@@ -550,6 +722,12 @@
                 div.setAttribute('data-text', currentValues.join(', ')); // For front-end display
                 regions.getRegions()[0].setOptions({ content: currentValues.join(', ') });
             }
+            if (event.target.name === "confidence") {
+                const value = event.target.value;
+                div.dataset.confidence = value;
+                applyConfidenceColor(div, value);
+            }
+
         });
         annotationMenu.querySelectorAll('.deleteButton').forEach(okButton => {
             okButton.addEventListener('click', (event) => {
@@ -1019,7 +1197,8 @@
             if (currentTime >= start && currentTime <= end) {
                 interval.style.backgroundColor = "rgba(255, 165, 0, 0.6)"; // Highlight orange
             } else {
-                interval.style.backgroundColor = "rgba(173, 216, 230, 0.6)";
+                {#interval.style.backgroundColor = "rgba(173, 216, 230, 0.6)";#}
+                applyConfidenceColor(interval, interval.dataset.confidence);
             }
         });
         // Highlight Point
@@ -1049,7 +1228,8 @@
                 const intervalAnnotations = Array.from(tier.getElementsByClassName("interval")).map(interval => ({
                     xmin: parseFloat(interval.dataset.start),
                     xmax: parseFloat(interval.dataset.end),
-                    text: interval.dataset.text || ""
+                    text: interval.dataset.text ?? "",
+                    confidence: interval.dataset.confidence ?? "1"
                 })).filter(item => !isNaN(item.xmin) && !isNaN(item.xmax) && item.xmin < item.xmax);
                 intervalAnnotations.sort((a, b) => a.xmin - b.xmin);
                 annotations.push({
@@ -1115,6 +1295,16 @@
         URL.revokeObjectURL(url);
     };
 
+    function applyConfidenceColor(intervalDiv, value) {
+        if (value === "1") {
+            intervalDiv.style.backgroundColor = "rgba(80, 200, 120, 0.6)"; // Green
+        } else if (value === "0") {
+            intervalDiv.style.backgroundColor = "rgba(255, 99, 71, 0.6)"; // Red
+        } else {
+            intervalDiv.style.backgroundColor = "rgba(173, 216, 230, 0.6)"; // Default blue
+        }
+    }
+
     document.addEventListener("DOMContentLoaded", () => {
         const nameContainer = document.getElementById("name-container")
         const tierContainer = document.getElementById("tier-control");
@@ -1153,9 +1343,11 @@
                 }
                 // If you click on a "point" or "interval", jump directly to the corresponding time
                 if (event.target.classList.contains("point") || event.target.classList.contains("interval")) {
+                    installGapClamp(regions, selectedTier, wavesurfer);
                     // Reset the background color of all intervals to the default blue
                     document.querySelectorAll(".interval").forEach((interval) => {
-                        interval.style.backgroundColor = "rgba(173, 216, 230, 0.6)"; // blue
+                        {#interval.style.backgroundColor = "rgba(173, 216, 230, 0.6)"; // blue#}
+                        applyConfidenceColor(interval, interval.dataset.confidence);
                     });
                     // Set the currently clicked interval to orange
                     event.target.style.backgroundColor = "rgba(255, 165, 0, 0.6)"; // orange
@@ -1196,16 +1388,18 @@
                 div.title = data.text ? data.text : "";
                 div.dataset.start = data.start.toFixed(5);
                 div.dataset.end = data.end.toFixed(5);
-                div.dataset.text = data.text ? data.text : "";
+                div.dataset.text = data.text ?? "";
+                div.dataset.confidence = data.confidence ?? "1";
+                applyConfidenceColor(div, div.dataset.confidence);
                 const startPercentage = Math.max(0, Math.min((data.start / videoDuration) * 100, 100));
                 const widthPercentage = Math.max(0, Math.min(((data.end - data.start) / videoDuration) * 100, 100));
                 div.style.left = startPercentage + "%";
                 div.style.width = widthPercentage + "%";
 
-                const handleLeft = document.createElement('div');
-                handleLeft.className = 'handle handle-left';
-                const handleRight = document.createElement('div');
-                handleRight.className = 'handle handle-right';
+                {#const handleLeft = document.createElement('div');#}
+                {#handleLeft.className = 'handle handle-left';#}
+                {#const handleRight = document.createElement('div');#}
+                {#handleRight.className = 'handle handle-right';#}
             } else if (data.type === "point") {
                 div.className = "point";
                 div.dataset.time = data.time.toFixed(5);
@@ -1225,6 +1419,7 @@
                 document.querySelectorAll('.point-tier').forEach(t => t.classList.remove('selected'));
                 tier.classList.add('selected');
                 selectedTier = tier; // Get the selected tier ID
+                installGapClamp(regions, selectedTier, wavesurfer);
                 const start = parseFloat(event.target.dataset.start);
                 const end = parseFloat(event.target.dataset.end);
                 selectedAnotation = event.target.id;
@@ -1239,9 +1434,15 @@
                 });
                 videoPlayer.currentTime = start;
                 document.querySelectorAll(".interval").forEach((interval) => {
-                    interval.style.backgroundColor = "rgba(173, 216, 230, 0.6)"; // blue
+                    {#interval.style.backgroundColor = "rgba(173, 216, 230, 0.6)"; // blue#}
+                    applyConfidenceColor(interval, interval.dataset.confidence);
                 });
                 div.style.backgroundColor = "rgba(255, 165, 0, 0.6)"; // orange
+
+                const currentConfidence = div.dataset.confidence ?? "1";
+                annotationMenu.querySelectorAll('input[name="confidence"]').forEach(radio => {
+                    radio.checked = (radio.value === currentConfidence);
+                });
                 const selectedValues = div.dataset.text ? div.dataset.text.split(', ').map(val => val.trim()) : [];
                 annotationMenu.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
                     checkbox.checked = selectedValues.includes(checkbox.value);
@@ -1329,6 +1530,11 @@
                     div.setAttribute('data-text', currentValues.join(', ')); // For front-end display
                     regions.getRegions()[0].setOptions({ content: currentValues.join(', ') });
                 }
+                if (event.target.name === "confidence") {
+                    const value = event.target.value;
+                    div.dataset.confidence = value;
+                    applyConfidenceColor(div, value);
+                }
             });
             annotationMenu.querySelectorAll('.deleteButton').forEach(okButton => {
                 okButton.addEventListener('click', (event) => {
@@ -1411,6 +1617,7 @@
             document.querySelectorAll('.point-tier').forEach(t => t.classList.remove('selected'));
             newTier.classList.add('selected');
             selectedTier = newTier;
+            installGapClamp(regions, selectedTier, wavesurfer);
             newTier.addEventListener('click', () => {
                 // Clear the previous selection
                 document.querySelectorAll('.interval-tier').forEach(t => t.classList.remove('selected'));
@@ -1418,6 +1625,7 @@
                 // Set the current tier to selected
                 newTier.classList.add('selected');
                 selectedTier = newTier; // Get the selected tier ID
+                installGapClamp(regions, selectedTier, wavesurfer);
             });
             newTier.addEventListener("contextmenu", (event) => {
                 event.preventDefault();
@@ -1441,6 +1649,7 @@
                 document.querySelectorAll('.point-tier').forEach(t => t.classList.remove('selected'));
                 newTier.classList.add('selected');
                 selectedTier = newTier;
+                installGapClamp(regions, selectedTier, wavesurfer);
                 menu0.style.display = "none";
                 menu1.style.display = "none";
                 menu2.style.display = "none";
@@ -2024,6 +2233,37 @@
                 );
             }
         });
+
+        document.getElementById("backButton").addEventListener("click", async () => {
+            try {
+                const jsonData = prepareAnnotationPayload();
+                if (jsonData) {
+                    await fetch(`{{ URL_PREFIX }}/save_annotation`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify(jsonData)
+                    });
+                    console.log("Annotation saved before leaving.");
+                }
+                if (currentLockedFile) {
+                    await fetch("{{ URL_PREFIX }}/unlock_file", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            username: currentUsername,
+                            filename: currentLockedFile
+                        })
+                    });
+                    console.log("File unlocked successfully before returning.");
+                }
+
+            } catch (err) {
+                console.error("Error while saving/unlocking before leaving:", err);
+                alert("Saving or unlocking failed. Please refresh and try again!！");
+                return;
+            }
+            window.location.href = "{{ URL_PREFIX + url_for('login.general_form') }}";
+        });
     });
 
     wavesurfer.on('ready', function () {
@@ -2073,6 +2313,7 @@
                         end: originalData.xmax,
                         id: `interval-${tierData.name}-${index}`, // Generate unique ID
                         text: originalData.text,
+                        confidence: originalData.confidence
                     };
                 } else if (tierData.type === "TextTier") {
                     data = {

@@ -4,13 +4,13 @@ class t {
     }
 
     on(t, e, s) {
-        if (this.listeners[t] || (this.listeners[t] = new Set), this.listeners[t].add(e), null == s ? void 0 : s.once) {
-            const s = () => {
-                this.un(t, s), this.un(t, e)
+        if (this.listeners[t] || (this.listeners[t] = new Set), null == s ? void 0 : s.once) {
+            const s = (...i) => {
+                this.un(t, s), e(...i)
             };
-            return this.on(t, s), s
+            return this.listeners[t].add(s), () => this.un(t, s)
         }
-        return () => this.un(t, e)
+        return this.listeners[t].add(e), () => this.un(t, e)
     }
 
     un(t, e) {
@@ -33,119 +33,150 @@ class t {
 
 class e extends t {
     constructor(t) {
-        super(), this.subscriptions = [], this.options = t
+        super(), this.subscriptions = [], this.isDestroyed = !1, this.options = t
     }
 
-    onInit() {
-    }
+    onInit() {}
 
     _init(t) {
-        this.wavesurfer = t, this.onInit()
+        this.isDestroyed && (this.subscriptions = [], this.isDestroyed = !1)
+        this.wavesurfer = t
+        this.onInit()
     }
 
     destroy() {
-        this.emit("destroy"), this.subscriptions.forEach((t => t()))
+        this.emit("destroy")
+        this.subscriptions.forEach((t => t()))
+        this.subscriptions = []
+        this.isDestroyed = !0
+        this.wavesurfer = void 0
     }
 }
 
 function s(t, e) {
-    const i = e.xmlns ? document.createElementNS(e.xmlns, t) : document.createElement(t);
-    for (const [t, n] of Object.entries(e)) if ("children" === t) for (const [t, n] of Object.entries(e)) "string" == typeof n ? i.appendChild(document.createTextNode(n)) : i.appendChild(s(t, n)); else "style" === t ? Object.assign(i.style, n) : "textContent" === t ? i.textContent = n : i.setAttribute(t, n.toString());
+    const i = e.xmlns ? document.createElementNS(e.xmlns, t) : document.createElement(t)
+    for (const [t, n] of Object.entries(e))
+        if ("children" === t && n)
+            for (const [t, e] of Object.entries(n))
+                e instanceof Node ? i.appendChild(e)
+                    : "string" == typeof e ? i.appendChild(document.createTextNode(e))
+                    : i.appendChild(s(t, e))
+        else "style" === t ? Object.assign(i.style, n)
+            : "textContent" === t ? i.textContent = n
+            : i.setAttribute(t, n.toString())
     return i
 }
 
 function i(t, e, i) {
-    const n = s(t, e || {});
+    const n = s(t, e || {})
     return null == i || i.appendChild(n), n
 }
 
 const n = {
     lineWidth: 1,
     labelSize: 11,
+    labelPreferLeft: !1,
     formatTimeCallback: t => `${Math.floor(t / 60)}:${`0${Math.floor(t) % 60}`.slice(-2)}`,
-    getStats: null
-};
+    getStats: null,
+}
 
-class r extends e {
+class o extends e {
     constructor(t) {
-        super(t || {}), this.unsubscribe = () => {
-        }, this.onPointerMove = t => {
-            if (!this.wavesurfer) return;
-            const e = this.wavesurfer.getWrapper().getBoundingClientRect(), {width: s} = e, i = t.clientX - e.left,
-                n = Math.min(1, Math.max(0, i / s)), r = Math.min(s - this.options.lineWidth - 1, i);
-            this.wrapper.style.transform = `translateX(${r}px)`, this.wrapper.style.opacity = "1";
-            const o = this.wavesurfer.getDuration() || 0;
-            // this.label.textContent = this.options.formatTimeCallback(o * n);
-            const timeSec = o * n;
-            const timeText = this.options.formatTimeCallback(timeSec);
+        super(t || {})
+        this.lastPointerPosition = null
+        this.unsubscribe = () => {}
+        this.extraClones = []
+
+        this.onPointerMove = t => {
+            if (!this.wavesurfer) return
+            this.lastPointerPosition = { clientX: t.clientX, clientY: t.clientY }
+            const e = this.wavesurfer.getWrapper().getBoundingClientRect(),
+                { width: s } = e,
+                i = t.clientX - e.left,
+                n = Math.min(1, Math.max(0, i / s)),
+                posX = Math.min(s - this.options.lineWidth - 1, i)
+
+            // main hover line
+            this.wrapper.style.transform = `translateX(${posX}px)`
+            this.wrapper.style.opacity = "1"
+
+            // calculate main label
+            const duration = this.wavesurfer.getDuration() || 0
+            const timeSec = duration * n
+            const timeText = this.options.formatTimeCallback(timeSec)
+
             if (this.options.getStats) {
-                const { amplitude, pitch, intensity } = this.options.getStats(timeSec) || {};
+                const { amplitude, pitch, intensity } = this.options.getStats(timeSec) || {}
                 this.label.innerHTML =
                     `${timeText}<br>` +
-                    `Amp: ${amplitude != null ? amplitude.toFixed(2) : '--'}<br>`;
+                    `Amp: ${amplitude != null ? amplitude.toFixed(2) : '--'}<br>`
             } else {
-                this.label.textContent = timeText;
+                this.label.textContent = timeText
             }
 
-            const a = this.label.offsetWidth;
-            this.label.style.transform = r + a > s ? `translateX(-${a + this.options.lineWidth}px)` : "",
+            const labelWidth = this.label.offsetWidth
+            const preferLeft = this.options.labelPreferLeft ? posX - labelWidth > 0 : posX + labelWidth > s
+            this.label.style.transform = preferLeft
+                ? `translateX(-${labelWidth + this.options.lineWidth}px)`
+                : ""
 
-                // Calculate hover line display
-                this.extraClones?.forEach(clone => {
-                    const cloneContainer = clone.parentElement;
-                    if (!cloneContainer) return;
+            // Multi-container clones
+            this.extraClones?.forEach(clone => {
+                const container = clone.parentElement
+                if (!container) return
 
-                    // Main wrapper size (reference baseline)
-                    const mainRect = this.wavesurfer.getWrapper().getBoundingClientRect();
-                    const mainWidth = mainRect.width;
+                const mainRect = this.wavesurfer.getWrapper().getBoundingClientRect()
+                const mainWidth = mainRect.width
 
-                    // Current clone container size and offset
-                    const containerRect = cloneContainer.getBoundingClientRect();
-                    const containerOffsetLeft = containerRect.left - mainRect.left;
+                const containerRect = container.getBoundingClientRect()
+                const containerOffsetLeft = containerRect.left - mainRect.left
 
-                    // Unified relative X coordinate
-                    const posX = Math.min(mainWidth - this.options.lineWidth - 1, t.clientX - mainRect.left);
+                const unifiedX = Math.min(mainWidth - this.options.lineWidth - 1, t.clientX - mainRect.left)
+                const relativeX = unifiedX - containerOffsetLeft
 
-                    // Position calculation: main hover coordinate - container offset
-                    const relativeX = posX - containerOffsetLeft;
-                    clone.style.transform = `translateX(${relativeX}px)`;
-                    clone.style.opacity = '1';
+                clone.style.transform = `translateX(${relativeX}px)`
+                clone.style.opacity = '1'
 
-                    const label = clone.querySelector('span');
-                    if (label) {
-                        const duration = this.wavesurfer.getDuration() || 0;
-                        const relRatio  = posX / mainWidth;
-                        const cloneTime = duration * relRatio;
+                const label = clone.querySelector('span')
+                if (label) {
+                    const relRatio = unifiedX / mainWidth
+                    const cloneTime = duration * relRatio
 
-                        if (this.options.getStats) {
-                            const { pitch, intensity } = this.options.getStats(cloneTime) || {};
-                            label.innerHTML =
-                                `Pitch(Hz): ${pitch != null ? pitch.toFixed(2) : '--'}<br>` +
-                                `Intensity(dB): ${intensity != null ? intensity.toFixed(2) : '--'}`;
-                        } else {
-                            label.textContent = this.options.formatTimeCallback(cloneTime);
-                        }
-
-                        const labelWidth = label.offsetWidth;
-                        label.style.transform =
-                            relativeX + labelWidth > containerRect.width
-                                ? `translateX(-${labelWidth + this.options.lineWidth}px)`
-                                : '';
+                    if (this.options.getStats) {
+                        const { pitch, intensity } = this.options.getStats(cloneTime) || {}
+                        label.innerHTML =
+                            `Pitch(Hz): ${pitch != null ? pitch.toFixed(2) : '--'}<br>` +
+                            `Intensity(dB): ${intensity != null ? intensity.toFixed(2) : '--'}`
+                    } else {
+                        label.textContent = this.options.formatTimeCallback(cloneTime)
                     }
-                });
 
+                    const labelW = label.offsetWidth
+                    label.style.transform =
+                        relativeX + labelW > containerRect.width
+                            ? `translateX(-${labelW + this.options.lineWidth}px)`
+                            : ''
+                }
+            })
 
-                this.emit("hover", n)
-        }, this.onPointerLeave = () => {
-            this.wrapper.style.opacity = "0",
-                this.extraClones?.forEach(clone => {
-                    clone.style.opacity = '0';
-                });
-        }, this.options = Object.assign({}, n, t), this.wrapper = i("div", {part: "hover"}), this.label = i("span", {part: "hover-label"}, this.wrapper), this.extraClones = []
+            this.emit("hover", n)
+        }
+
+        this.onPointerLeave = () => {
+            this.wrapper.style.opacity = "0"
+            this.lastPointerPosition = null
+            this.extraClones?.forEach(clone => {
+                clone.style.opacity = '0'
+            })
+        }
+
+        this.options = Object.assign({}, n, t)
+        this.wrapper = i("div", { part: "hover" })
+        this.label = i("span", { part: "hover-label" }, this.wrapper)
     }
 
     static create(t) {
-        return new r(t)
+        return new o(t)
     }
 
     addUnits(t) {
@@ -153,8 +184,10 @@ class r extends e {
     }
 
     onInit() {
-        if (!this.wavesurfer) throw Error("WaveSurfer is not initialized");
-        const t = this.wavesurfer.options, e = this.options.lineColor || t.cursorColor || t.progressColor;
+        if (!this.wavesurfer) throw Error("WaveSurfer is not initialized")
+        const t = this.wavesurfer.options,
+            e = this.options.lineColor || t.cursorColor || t.progressColor
+
         Object.assign(this.wrapper.style, {
             position: "absolute",
             zIndex: 10,
@@ -165,33 +198,50 @@ class r extends e {
             borderLeft: `${this.addUnits(this.options.lineWidth)} solid ${e}`,
             opacity: "0",
             transition: "opacity .1s ease-in"
-        }), Object.assign(this.label.style, {
+        })
+        Object.assign(this.label.style, {
             display: "block",
             backgroundColor: this.options.labelBackground,
             color: this.options.labelColor,
             fontSize: `${this.addUnits(this.options.labelSize)}`,
             transition: "transform .1s ease-in",
             padding: "2px 3px"
-        });
-        const s = this.wavesurfer.getWrapper();
+        })
 
-        s.appendChild(this.wrapper), s.addEventListener("pointermove", this.onPointerMove), s.addEventListener("pointerleave", this.onPointerLeave), s.addEventListener("wheel", this.onPointerMove), this.unsubscribe = () => {
-            s.removeEventListener("pointermove", this.onPointerMove), s.removeEventListener("pointerleave", this.onPointerLeave), s.removeEventListener("wheel", this.onPointerLeave)
+        const wrapper = this.wavesurfer.getWrapper()
+        wrapper.appendChild(this.wrapper)
+
+        const updateOnZoomScroll = () => {
+            this.lastPointerPosition && this.onPointerMove(this.lastPointerPosition)
+        }
+        const zoomUnsub = this.wavesurfer.on("zoom", updateOnZoomScroll)
+        const scrollUnsub = this.wavesurfer.on("scroll", updateOnZoomScroll)
+
+        wrapper.addEventListener("pointermove", this.onPointerMove)
+        wrapper.addEventListener("pointerleave", this.onPointerLeave)
+        wrapper.addEventListener("wheel", this.onPointerMove)
+
+        this.unsubscribe = () => {
+            wrapper.removeEventListener("pointermove", this.onPointerMove)
+            wrapper.removeEventListener("pointerleave", this.onPointerLeave)
+            wrapper.removeEventListener("wheel", this.onPointerMove)
+            zoomUnsub()
+            scrollUnsub()
         }
     }
 
     attachToContainer(container) {
-        const clone = this.wrapper.cloneNode(true);
-        container.style.position = 'relative';
-        container.appendChild(clone);
+        const clone = this.wrapper.cloneNode(true)
+        container.style.position = 'relative'
+        container.appendChild(clone)
         this.extraClones.push(clone)
     }
 
-
-
     destroy() {
-        super.destroy(), this.unsubscribe(), this.wrapper.remove()
+        super.destroy()
+        this.unsubscribe()
+        this.wrapper.remove()
     }
 }
 
-export {r as default};
+export { o as default }

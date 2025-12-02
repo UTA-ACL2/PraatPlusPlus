@@ -1,11 +1,12 @@
 import os
 import shutil
-from flask import Blueprint, request, jsonify, render_template, url_for
+from flask import Blueprint, request, jsonify, render_template, url_for, session
 from app.config import IS_SERVER, URL_PREFIX
 from app.utils.utils import execute_command
 import parselmouth
 from parselmouth.praat import call
 import numpy as np
+from app.utils.utils import get_user_folder_path
 
 general_bp = Blueprint('general', __name__)
 
@@ -55,6 +56,7 @@ def general():
         if request.method == 'GET':
             return render_template('general_form.html')
 
+        folder_name = session.get("current_folder")
         audio_file = request.files.get('audioFile')
         username = request.form.get("username")
 
@@ -66,7 +68,8 @@ def general():
         print(f"audio_basename:{audio_basename}")
 
         # Final save directory
-        target_dir = os.path.join(BASE_DIR, "static", "videos", "pool", username, "annotation", audio_basename, "")
+        user_folder_path = get_user_folder_path()
+        target_dir = os.path.join(user_folder_path, "annotation", audio_basename, "")
         create_directory_if_not_exists(target_dir)
 
         # Required file path
@@ -77,7 +80,7 @@ def general():
         # If all three files exist, load them directly
         if file_exists(audio_file_path_mp4, audio_file_path_wav, graph_file_path):
             return jsonify({
-                "redirect": URL_PREFIX + url_for("general.viewer", username=username, fileName=audio_basename)
+                "redirect": URL_PREFIX + url_for("general.viewer", username=username, fileName=audio_basename, folderName=folder_name)
             })
 
         # Otherwise reprocess
@@ -128,7 +131,7 @@ def general():
         #     return jsonify({"error": f"pitchIntensityScript failed: {str(e)}"}), 500
 
         return jsonify({
-            "redirect": URL_PREFIX + url_for("general.viewer", username=username, fileName=audio_basename)
+            "redirect": URL_PREFIX + url_for("general.viewer", username=username, fileName=audio_basename, folderName=folder_name)
         })
 
     except Exception as e:
@@ -139,7 +142,8 @@ def general():
 def viewer():
     username = request.args.get("username")
     file_name = request.args.get("fileName")
-    base = f"{URL_PREFIX}/static/videos/pool/{username}/annotation/{file_name}/{file_name}"
+    folder_name = request.args.get("folderName")
+    base = f"{URL_PREFIX}/static/videos/pool/{username}/{folder_name}/annotation/{file_name}/{file_name}"
     return render_template(
         "viewer.html",
         audioFile=f"{base}.wav",

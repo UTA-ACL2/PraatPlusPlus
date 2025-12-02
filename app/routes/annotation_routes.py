@@ -1,6 +1,7 @@
 import os
 import json
 from flask import Blueprint, request, jsonify
+from app.utils.utils import get_user_folder_path
 
 annotation_bp = Blueprint("annotation", __name__)
 
@@ -23,7 +24,8 @@ def save_annotation():
     video_name = data["videoName"]
     annotation = data["annotations"]
 
-    annotation_folder = os.path.join(BASE_DIR, "static", "videos", "pool", username, "annotation", video_name)
+    user_folder_path = get_user_folder_path()
+    annotation_folder = os.path.join(user_folder_path, "annotation", video_name)
     os.makedirs(annotation_folder, exist_ok=True)  # Create directory
 
     json_path = os.path.join(annotation_folder, "annotations.json")
@@ -42,7 +44,8 @@ def load_annotation():
     if not username or not video_name:
         return jsonify({"success": False, "message": "Missing parameters"}), 400
 
-    json_path = os.path.join(BASE_DIR, "static", "videos", "pool", username, "annotation", video_name, "annotations.json")
+    user_folder_path = get_user_folder_path()
+    json_path = os.path.join(user_folder_path, "annotation", video_name, "annotations.json")
 
     if not os.path.exists(json_path):
         return jsonify({"success": False, "message": "No annotation found."})

@@ -3,6 +3,7 @@ import shutil
 from flask import Blueprint, request, session, redirect, url_for, flash, jsonify
 import os
 from app.config import URL_PREFIX
+from app.utils.utils import get_user_folder_path
 
 upload_bp = Blueprint('upload', __name__)
 
@@ -32,9 +33,8 @@ def upload_files():
         flash("You must be logged in to upload files.", "error")
         return redirect(URL_PREFIX + url_for('login.login'))
 
-    username = session['username']  # Get the currently logged-in user
-    user_folder = os.path.join(UPLOAD_FOLDER, username)  # User's pool directory
-    annotation_folder = os.path.join(user_folder, "annotation")
+    user_folder_path = get_user_folder_path()
+    annotation_folder = os.path.join(user_folder_path, "annotation")
     os.makedirs(annotation_folder, exist_ok=True)  # Ensure the directory exists
 
     files = request.files.getlist("audioFile")  # Get multiple files
@@ -55,12 +55,12 @@ def upload_files():
                 shutil.rmtree(video_annotation_dir, ignore_errors=True)
                 # Delete `.mp4` and `.wav` files with the same prefix name
                 for ext in ['.mp4', '.wav', 'mp3']:
-                    file_path = os.path.join(user_folder, f"{basename}{ext}")
+                    file_path = os.path.join(user_folder_path, f"{basename}{ext}")
                     if os.path.exists(file_path):
                         os.remove(file_path)
 
             os.makedirs(video_annotation_dir, exist_ok=True)
-            save_path = os.path.join(user_folder, filename)
+            save_path = os.path.join(user_folder_path, filename)
             file.save(save_path)
             uploaded_files.append(filename)
 
@@ -74,10 +74,10 @@ def upload_files():
 
 @upload_bp.route('/check_file_exists', methods=['GET'])
 def check_file_exists():
-    username = request.args.get("username")
+    username = session.get('acting_username', session['username'])
     video_name = request.args.get("videoName")  # Without file extension.
     # Check if a file with the same prefix already exists in the user's directory
-    user_folder = os.path.join(UPLOAD_FOLDER, username)
+    user_folder = get_user_folder_path()
     video_file_path = os.path.join(user_folder, f"{video_name}.mp4")
     audio_file_path = os.path.join(user_folder, f"{video_name}.wav")
     audio_file_path2 = os.path.join(user_folder, f"{video_name}.mp3")

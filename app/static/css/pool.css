@@ -198,3 +198,64 @@
     margin: 8px 0 14px;
     text-align: left;
 }
+
+#folderToggle {
+    margin-left: 10px;
+    cursor: pointer;
+    color: #28a745;
+    font-weight: 600;
+    text-decoration: underline;
+}
+
+#folderToggle:hover {
+    color: #1e7e34;
+}
+
+#folderPanel {
+    display: none;
+    background: #e8f5e9;
+    border: 1px solid #81c784;
+    border-radius: 6px;
+    padding: 10px 12px;
+    margin: 8px 0 14px;
+    text-align: left;
+}
+
+.folder-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    max-height: 120px;
+    overflow-y: auto;
+}
+
+.folder-chip {
+    flex: 0 0 calc(33.33% - 8px); /* max 3 in each row */
+    background: #c8e6c9;
+    padding: 6px 8px;
+    border-radius: 4px;
+    text-align: center;
+    cursor: pointer;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.folder-chip:hover {
+    background: #a5d6a7;
+}
+
+.folder-add {
+    background: #81c784;
+    font-weight: 700;
+}
+
+.folder-add:hover {
+    background: #66bb6a;
+}
+
+.folder-chip.selected {
+    background: #0d6efd;
+    color: white;
+    font-weight: bold;
+}

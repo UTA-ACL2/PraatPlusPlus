@@ -15,6 +15,16 @@
         <h3>
             File Pool for <span id="userDisplay"></span>
             <span id="helpLink" title="Show instructions">Help</span>
+            <span id="folderToggle" title="Show folders">Folder</span>
+            {% if username in SUPER_USERS %}
+                <select id="switchUser" style="float: right">
+                    {% for u in VALID_ACCOUNTS %}
+                        <option value="{{ u }}" {% if u == acting_username %}selected{% endif %}>
+                            {{ u }}
+                        </option>
+                    {% endfor %}
+                </select>
+            {% endif %}
         </h3>
         <div id="instructions">
             <ul style="margin:0; padding-left:20px;">
@@ -26,6 +36,9 @@
             <p> Full features:
                 <a href="https://youtu.be/-rjM8eFayUA?si=m4QV_mgjR4PtuXXV" target="_blank" rel="noopener">Praat++ Tutorial</a>
             </p>
+        </div>
+        <div id="folderPanel" style="display: block">
+            <div class="folder-grid"></div>
         </div>
         <form action="{{ URL_PREFIX + url_for('upload.upload_files') }}" method="post" enctype="multipart/form-data" id="runForm">
             <div style="display: flex; align-items: center">
@@ -73,139 +86,264 @@
         {% if message %}
             alert("{{ message }}");
         {% endif %}
-
-        const link = document.getElementById('helpLink');
-        const panel = document.getElementById('instructions');
-        link.addEventListener('click', () => {
-            const show = panel.style.display !== 'block';
-            panel.style.display = show ? 'block' : 'none';
-            link.title = show ? 'Hide instructions' : 'Show instructions';
-        });
-
-        const audioInput = document.getElementById('audioFile');
-        const runButton = document.getElementById('runButton');
-        const errorMessage = document.getElementById('errorMessage');
-        const username = "{{ username }}";
-
-        // Check the file format and whether the file is selected
-        function validateFile() {
-            const file = audioInput.files[0];
-            errorMessage.textContent = '';
-
-            if (!file) {
-                errorMessage.textContent = 'No video or audio provided';
-                return false;
-            }
-
-            const fileName = file.name.toLowerCase();
-            if (!(fileName.endsWith('.mp4') || fileName.endsWith('.wav') || fileName.endsWith('.mp3'))) {
-                errorMessage.textContent = 'Please upload MP4, MP3, WAV file';
-                return false;
-            }
-
-            // If the file is valid, remove the error message
-            errorMessage.textContent = '';
-            return true;
-        }
-
-        // Trigger validation when the Run button is clicked
-        runButton.addEventListener('click', (event) => {
-            if (!validateFile()) {
-                event.preventDefault(); // Prevent form submission
-            }
-        });
-
-        // Trigger validation when file selection changes
-        audioInput.addEventListener('change', () => {
-            validateFile();
-        });
-
-        document.getElementById('runButton').addEventListener('click', async () => {
-            const fileInput = document.getElementById('audioFile');
-            const files = Array.from(fileInput.files);
-            const formData = new FormData();
-
-            for (const file of files) {
-                const ext = file.name.split('.').pop();
-                let baseName = file.name.substring(0, file.name.lastIndexOf('.'));
-                function sanitizeFileName(name) {
-                    return name
-                        .replace(/[^\w]/g, '_')        // Replace invalid characters with `_`
-                        .replace(/_+/g, '_')           // Merge consecutive `_`
-                        .replace(/^_+|_+$/g, '');      // Remove leading and trailing `_`
-                }
-                baseName = sanitizeFileName(baseName);
-                let finalName = baseName;
-                let override = false;
-
-                // Check for duplicate names
-                const checkRes = await fetch(`{{URL_PREFIX}}/check_file_exists?username=${username}&videoName=${finalName}`);
-                const { exists } = await checkRes.json();
-
-                if (exists) {
-                    const confirmOverwrite = confirm(`File "${finalName}" already exists. Do you want to overwrite it? (previous annotation will be deleted)`);
-                    if (confirmOverwrite) {
-                        override = true;
-                    } else {
-                        // Automatically generate bark_2, bark_3, ... until a unique name is found
-                        let index = 2;
-                        while (true) {
-                            const newName = `${baseName}_${index}`;
-                            const check = await fetch(`{{URL_PREFIX}}/check_file_exists?username=${username}&videoName=${newName}`);
-                            const { exists: existsAlt } = await check.json();
-                            if (!existsAlt) {
-                                finalName = newName;
-                                break;
-                            }
-                            index++;
-                        }
-                    }
-                }
-                // Create a renamed File object
-                const renamedFile = new File([file], `${finalName}.${ext}`, { type: file.type });
-                // Add to FormData
-                formData.append("audioFile", renamedFile);
-                formData.append(`override_${finalName}`, override); // Let the backend identify whether the annotation subdirectory needs to be cleared
-            }
-            // Submit
-            const form = document.getElementById('runForm');
-            const action = form.getAttribute('action');
-            const res = await fetch(action, {
-                method: 'POST',
-                body: formData
+        const username = "{{ acting_username or username }}";
+        let folderName = "{{ session.get('current_folder') }}";
+        document.addEventListener("DOMContentLoaded", () => {
+            const link = document.getElementById('helpLink');
+            const panel = document.getElementById('instructions');
+            link.addEventListener('click', () => {
+                const show = panel.style.display !== 'block';
+                panel.style.display = show ? 'block' : 'none';
+                link.title = show ? 'Hide instructions' : 'Show instructions';
             });
-            if (res.ok) {
-                window.location.reload();
-            } else {
-                alert(" Upload failed！");
-            }
-        });
 
-        document.getElementById('exportButton').addEventListener('click', async () => {
-            try {
-                const res = await fetch(`{{ URL_PREFIX }}/export_all_annotations?username=${username}`);
-                if (!res.ok) {
-                    const err = await res.json();
-                    alert(err.error || "Export failed!");
+            const folderToggle = document.getElementById("folderToggle");
+            const folderPanel = document.getElementById("folderPanel");
+            folderToggle.addEventListener("click", () => {
+                const show = folderPanel.style.display !== "block";
+                folderPanel.style.display = show ? "block" : "none";
+                folderToggle.title = show ? "Hide folders" : "Show folders";
+                if (show) loadFolders();
+            });
+
+            document.querySelector(".folder-grid").addEventListener("click", (e) => {
+                const chip = e.target.closest(".folder-chip");
+                if (!chip) return;
+                if (chip.classList.contains("folder-add")) {
+                    createFolder();
                     return;
                 }
-                const blob = await res.blob();
-                const url = window.URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `${username}_all_annotations.json`;
-                document.body.appendChild(a);
-                a.click();
-                a.remove();
-                window.URL.revokeObjectURL(url);
-                alert("Export succeeded!");
-            } catch (err) {
-                console.error(err);
-                alert("Error exporting annotations!");
-            }
-        });
+                const folderName = chip.dataset.folder;
+                if (folderName) switchFolder(folderName);
+            });
 
-        document.addEventListener("DOMContentLoaded", () => {
+            function switchFolder(folderNameNew) {
+                fetch("{{ URL_PREFIX }}/switch_folder", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ folderNameNew })
+                })
+                    .then(res => {
+                        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                        return res.json();
+                    })
+                    .then(data => {
+                        if (data.success) {
+                            folderName = folderNameNew;
+                            loadPage(1);
+                        } else {
+                            alert("Folder switch failed: " + (data.error || "Unknown"));
+                        }
+                    })
+                    .catch(err => {
+                        console.error("Switch failed:", err);
+                        alert("Cannot switch folder. Please try again.");
+                    });
+            }
+
+            function createFolder() {
+                const name = prompt("Enter new folder name:")?.trim();
+                if (!name) return;
+                fetch("{{ URL_PREFIX }}/create_folder", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ folderName: name })
+                })
+                    .then(res => {
+                        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                        return res.json();
+                    })
+                    .then(data => {
+                        if (data.success) {
+                            alert("Folder created: " + data.folder);
+                            switchFolder(data.folder);
+                        } else {
+                            alert("Failed to create folder: " + (data.error || "Unknown"));
+                        }
+                    })
+                    .catch(err => {
+                        console.error("Create folder error:", err);
+                        alert("Error creating folder. Try again.");
+                    });
+            }
+
+            function loadFolders() {
+                fetch(`{{ URL_PREFIX }}/pool/folders`)
+                    .then(res => {
+                        if (!res.ok) {
+                            throw new Error(`HTTP ${res.status}`);
+                        }
+                        return res.json();
+                    })
+                    .then(data => {
+                        if (!data.success) {
+                            console.error("Error:", data.error);
+                            alert("Failed to load folders: " + (data.error || "Unknown error"));
+                            return;
+                        }
+                        const grid = document.querySelector(".folder-grid");
+                        grid.innerHTML = "";
+                        data.folders.forEach(folder => {
+                            const div = document.createElement("div");
+                            div.className = "folder-chip";
+                            div.title = folder;
+                            div.innerHTML = `📁 ${folder}`;
+                            div.dataset.folder = folder;
+                            if (folder === data.current_folder) {
+                                div.classList.add("selected");
+                            }
+                            grid.appendChild(div);
+                        });
+                        const addChip = document.createElement("div");
+                        addChip.className = "folder-chip folder-add";
+                        addChip.textContent = "➕";
+                        grid.appendChild(addChip);
+                    })
+                    .catch(err => {
+                        console.error("Folder loading failed:", err)
+                        alert("Folder loading failed, please try again.");
+                    });
+            }
+
+            document.getElementById("switchUser")?.addEventListener("change", async (event) => {
+                const selectedUser = event.target.value;
+                if (!selectedUser) return;
+                const previousUser = "{{ acting_username or username }}";
+                const res = await fetch("{{ URL_PREFIX }}/switch_user", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ selectedUser: selectedUser })
+                });
+                const result = await res.json();
+                if (result.success) {
+                    window.location.reload();
+                } else {
+                    alert("Switch failed：" + result.error);
+                    event.target.value = previousUser;
+                }
+            });
+
+            const audioInput = document.getElementById('audioFile');
+            const runButton = document.getElementById('runButton');
+            const errorMessage = document.getElementById('errorMessage');
+            // Check the file format and whether the file is selected
+            function validateFile() {
+                const file = audioInput.files[0];
+                errorMessage.textContent = '';
+
+                if (!file) {
+                    errorMessage.textContent = 'No video or audio provided';
+                    return false;
+                }
+
+                const fileName = file.name.toLowerCase();
+                if (!(fileName.endsWith('.mp4') || fileName.endsWith('.wav') || fileName.endsWith('.mp3'))) {
+                    errorMessage.textContent = 'Please upload MP4, MP3, WAV file';
+                    return false;
+                }
+
+                // If the file is valid, remove the error message
+                errorMessage.textContent = '';
+                return true;
+            }
+
+            // Trigger validation when the Run button is clicked
+            runButton.addEventListener('click', (event) => {
+                if (!validateFile()) {
+                    event.preventDefault(); // Prevent form submission
+                }
+            });
+
+            // Trigger validation when file selection changes
+            audioInput.addEventListener('change', () => {
+                validateFile();
+            });
+
+            document.getElementById('runButton').addEventListener('click', async () => {
+                const fileInput = document.getElementById('audioFile');
+                const files = Array.from(fileInput.files);
+                const formData = new FormData();
+
+                for (const file of files) {
+                    const ext = file.name.split('.').pop();
+                    let baseName = file.name.substring(0, file.name.lastIndexOf('.'));
+                    function sanitizeFileName(name) {
+                        return name
+                            .replace(/[^\w]/g, '_')        // Replace invalid characters with `_`
+                            .replace(/_+/g, '_')           // Merge consecutive `_`
+                            .replace(/^_+|_+$/g, '');      // Remove leading and trailing `_`
+                    }
+                    baseName = sanitizeFileName(baseName);
+                    let finalName = baseName;
+                    let override = false;
+
+                    // Check for duplicate names
+                    const checkRes = await fetch(`{{URL_PREFIX}}/check_file_exists?username=${username}&videoName=${finalName}`);
+                    const { exists } = await checkRes.json();
+
+                    if (exists) {
+                        const confirmOverwrite = confirm(`File "${finalName}" already exists. Do you want to overwrite it? (previous annotation will be deleted)`);
+                        if (confirmOverwrite) {
+                            override = true;
+                        } else {
+                            // Automatically generate bark_2, bark_3, ... until a unique name is found
+                            let index = 2;
+                            while (true) {
+                                const newName = `${baseName}_${index}`;
+                                const check = await fetch(`{{URL_PREFIX}}/check_file_exists?username=${username}&videoName=${newName}`);
+                                const { exists: existsAlt } = await check.json();
+                                if (!existsAlt) {
+                                    finalName = newName;
+                                    break;
+                                }
+                                index++;
+                            }
+                        }
+                    }
+                    // Create a renamed File object
+                    const renamedFile = new File([file], `${finalName}.${ext}`, { type: file.type });
+                    // Add to FormData
+                    formData.append("audioFile", renamedFile);
+                    formData.append(`override_${finalName}`, override); // Let the backend identify whether the annotation subdirectory needs to be cleared
+                }
+                // Submit
+                const form = document.getElementById('runForm');
+                const action = form.getAttribute('action');
+                const res = await fetch(action, {
+                    method: 'POST',
+                    body: formData
+                });
+                if (res.ok) {
+                    window.location.reload();
+                } else {
+                    alert(" Upload failed！");
+                }
+            });
+
+            document.getElementById('exportButton').addEventListener('click', async () => {
+                try {
+                    const res = await fetch(`{{ URL_PREFIX }}/export_all_annotations?username=${username}`);
+                    if (!res.ok) {
+                        const err = await res.json();
+                        alert(err.error || "Export failed!");
+                        return;
+                    }
+                    const blob = await res.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `${username}_all_annotations.json`;
+                    document.body.appendChild(a);
+                    a.click();
+                    a.remove();
+                    window.URL.revokeObjectURL(url);
+                    alert("Export succeeded!");
+                } catch (err) {
+                    console.error(err);
+                    alert("Error exporting annotations!");
+                }
+            });
+
             const poolContainer = document.getElementById("poolContainer");
             const fileList = document.getElementById("fileList");
             const userDisplay = document.getElementById("userDisplay");
@@ -274,6 +412,7 @@
                     renderPage();
                     poolContainer.style.display = "block";
                     saveState();
+                    loadFolders();
                 } catch (error) {
                     console.error("Error loading files:", error);
                 }
@@ -422,7 +561,7 @@
                         }
 
                         // Read file content
-                        const fileResponse = await fetch(`{{URL_PREFIX}}/static/videos/pool/${username}/${fileName}`); // Read file
+                        const fileResponse = await fetch(`{{URL_PREFIX}}/static/videos/pool/${username}/${folderName}/${fileName}`); // Read file
                         const fileBlob = await fileResponse.blob(); // Convert to Blob
                         // Create a `File` object (simulate user upload)
                         const selectedFile = new File([fileBlob], fileName, { type: "video/mp4" });
