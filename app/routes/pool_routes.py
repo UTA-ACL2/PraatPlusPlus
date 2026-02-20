@@ -59,17 +59,28 @@ def get_user_files(username):
     media_files = [f for f in all_files if os.path.splitext(f)[1].lower() in allowed_extensions]
     files_info = []
 
-    def is_annotated_data(data):
-        """A file is considered annotated if ANY tier contains at least one interval."""
-        if not isinstance(data, list):
-            return False
+    # def is_annotated_data(data):
+    #     """A file is considered annotated if ANY tier contains at least one interval."""
+    #     if not isinstance(data, list):
+    #         return False
+    #
+    #     for tier in data:
+    #         tier_data = tier.get("data", [])
+    #         if isinstance(tier_data, list) and len(tier_data) > 0:
+    #             return True
+    #
+    #     return False
 
-        for tier in data:
-            tier_data = tier.get("data", [])
-            if isinstance(tier_data, list) and len(tier_data) > 0:
-                return True
-
-        return False
+    def get_annotation_status(graph_exists, annotations):
+        """Return: Not Started / Ongoing / Finished"""
+        if not graph_exists:
+            return "Not Started"
+        if not isinstance(annotations, list) or len(annotations) == 0:
+            return "Ongoing"
+        for tier in annotations:
+            if not tier.get("finished", False):
+                return "Ongoing"
+        return "Finished"
 
     for file_name in media_files:
         # Try reading from cache
@@ -79,6 +90,7 @@ def get_user_files(username):
         file_path = os.path.join(folder, file_name)
         file_stat = os.stat(file_path)
         annotation_path = os.path.join(annotation_folder, file_name.rsplit('.', 1)[0], "annotations.json")
+        graph_path = os.path.join(annotation_folder, file_name.rsplit('.', 1)[0], file_name.rsplit('.', 1)[0] + ".graph")
 
         # If the cache does not exist, it means it is a new file → Recalculate metadata
         if not metadata:
@@ -92,22 +104,40 @@ def get_user_files(username):
             }
 
         # Update annotation status and lastAnnotationSaveTime every time
-        is_annotated = False
-        last_annotation_save_time = "----"
+        # is_annotated = False
+        # last_annotation_save_time = "----"
+        # if os.path.exists(annotation_path):
+        #     try:
+        #         with open(annotation_path, "r", encoding="utf-8") as f:
+        #             data = json.load(f)
+        #             # if isinstance(data, list) and len(data) > 0:
+        #             if is_annotated_data(data):
+        #                 is_annotated = True
+        #         mtime = os.path.getmtime(annotation_path)
+        #         last_annotation_save_time = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(mtime))
+        #     except Exception as e:
+        #         print(f"[WARN] Failed to read {annotation_path}: {e}")
+        #
+        # metadata["status"] = "Annotated" if is_annotated else "Not Annotated"
+        # metadata["lastAnnotationSaveTime"] = last_annotation_save_time
+
+        annotations = []
         if os.path.exists(annotation_path):
             try:
                 with open(annotation_path, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                    # if isinstance(data, list) and len(data) > 0:
-                    if is_annotated_data(data):
-                        is_annotated = True
+                    annotations = json.load(f)
+            except Exception:
+                annotations = []
+        graph_exists = os.path.exists(graph_path)
+        metadata["status"] = get_annotation_status(graph_exists, annotations)
+        if os.path.exists(annotation_path):
+            try:
                 mtime = os.path.getmtime(annotation_path)
-                last_annotation_save_time = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(mtime))
-            except Exception as e:
-                print(f"[WARN] Failed to read {annotation_path}: {e}")
-
-        metadata["status"] = "Annotated" if is_annotated else "Not Annotated"
-        metadata["lastAnnotationSaveTime"] = last_annotation_save_time
+                metadata["lastAnnotationSaveTime"] = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(mtime))
+            except:
+                metadata["lastAnnotationSaveTime"] = "----"
+        else:
+            metadata["lastAnnotationSaveTime"] = "----"
 
         update_user_cache(username, file_name, metadata)
         files_info.append(metadata)
@@ -121,7 +151,9 @@ def get_user_files(username):
         elif sort_key == "type":
             return item["type"].lower()
         elif sort_key == "status":
-            return 1 if item["status"] == "Annotated" else 0
+            # return 1 if item["status"] == "Annotated" else 0
+            order_map = {"Not Started": 0, "Ongoing": 1, "Finished": 2}
+            return order_map.get(item["status"], 0)
         elif sort_key == "duration":
             return float(item["duration"])
         elif sort_key == "size":

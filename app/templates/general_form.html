@@ -442,7 +442,14 @@
                     let statusDiv = document.createElement("div");
                     statusDiv.classList.add("col", "status");
                     statusDiv.textContent = file.status;
-                    statusDiv.style.color = file.status === "Annotated" ? "red" : "green"; // Red: annotated, Green: not annotated
+                    {#statusDiv.style.color = file.status === "Annotated" ? "red" : "green"; // Red: annotated, Green: not annotated#}
+                    if (file.status === "Not Started") {
+                        statusDiv.style.color = "gray";
+                    } else if (file.status === "Ongoing") {
+                        statusDiv.style.color = "orange";
+                    } else if (file.status === "Finished") {
+                        statusDiv.style.color = "green";
+                    }
 
                     // Create file duration label
                     let durationDiv = document.createElement("div");

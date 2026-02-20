@@ -30,7 +30,12 @@
             border-radius: 5px;
             text-align: center;
             box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
-            <p>Enter your username & password to log in:</p>
+            <p>Enter your username & password to log in:
+                <span title="Demo account:
+Username: guest
+Password: 123456
+" style="display:inline-block; width:18px; height:18px; line-height:18px; border:1px solid #0078D7; border-radius:50%; color:#0078D7; font-weight:700; cursor:help;">?</span>
+            </p>
             <form method="POST" action="{{ URL_PREFIX + url_for('login.login') }}">
                 <input type="text" name="username" placeholder="Username" required />
                 <input type="password" name="password" placeholder="Password" required /><br>

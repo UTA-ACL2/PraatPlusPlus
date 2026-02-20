@@ -26,8 +26,8 @@
             </div>
             <div style="display: flex; flex-direction: column; margin-left: 20px; gap: 10px;">
                 <a href="{{ URL_PREFIX + url_for('login.logout') }}" class="btn btn-primary">Logout</a>
-{#                <a href="{{ URL_PREFIX + url_for('login.general_form') }}" class="btn btn-primary">Back</a>#}
                 <button id="backButton" class="btn btn-primary">Back</button>
+{#                <button id="noAnnotationBtn" class="btn btn-warning" style="font-weight: bold; margin-top: 20px">🚫 No Annotation Needed"</button>#}
             </div>
             <!-- Right-side video display area -->
             <div style="flex: 2;">
@@ -127,6 +127,7 @@
             </div>
             <div id="tier-control" style="width: 100%; overflow: hidden; position: relative;">
             </div>
+            <div id="finish-container" title="finished or not"></div>
         </div>
         <div id="video-menu" class="context-menu">
             <ul>
@@ -727,7 +728,7 @@
                 div.dataset.confidence = value;
                 applyConfidenceColor(div, value);
             }
-
+            markTierUnfinished(selectedTier)
         });
         annotationMenu.querySelectorAll('.deleteButton').forEach(okButton => {
             okButton.addEventListener('click', (event) => {
@@ -740,6 +741,7 @@
                 const pitchDiv = document.getElementById('chart');
                 [ pitchDiv].forEach(c => c?.querySelectorAll('.region-overlay')?.forEach(e => e.remove()));
                 countTiersAndAnnotations()
+                markTierUnfinished(selectedTier)
             });
         });
 
@@ -789,6 +791,7 @@
             annotation.dataset.end = region.end.toFixed(5);
         }
         updateAllRegionOverlays()
+        markTierUnfinished(selectedTier);
     });
 
     const downloadTextGridButton = document.querySelector('#downloadTextGrid')
@@ -1223,6 +1226,8 @@
             const tierInput = document.getElementById(`${tierId}name`);
             const tierName = tierInput?.value || tierId; // Use the input box value or the default ID as the name
             const category = tier.dataset.category || "default";
+            const checkbox = document.querySelector(`#finish-container [data-tier-id="${tierId}"]`);
+            const finished = checkbox ? checkbox.checked : false;
 
             if (tierType === "interval") {
                 const intervalAnnotations = Array.from(tier.getElementsByClassName("interval")).map(interval => ({
@@ -1236,6 +1241,7 @@
                     type: "IntervalTier",
                     category: category,
                     name: tierName,
+                    finished: finished,
                     data: intervalAnnotations
                 });
             } else if (tierType === "point") {
@@ -1279,7 +1285,7 @@
         });
         return content;
     };
-    const fileName = "{{ fileName }}";
+    const fileName = "{{ fileName.rsplit('.', 1)[0] }}";
     // File download logic
     function downloadTextGrid() {
         const annotations = collectAnnotations();
@@ -1380,7 +1386,7 @@
         };
 
         // add annotation function
-        addAnnotation = (tier, data) => {
+        addAnnotation = (tier, data, isRestoring = false) => {
             const div = document.createElement("div");
             if (data.type === "interval") {
                 div.className = "interval";
@@ -1408,6 +1414,7 @@
             }
             tier.appendChild(div);
             countTiersAndAnnotations();
+            if (!isRestoring) markTierUnfinished(tier);
 
             const annotationMenu = document.getElementById("annotation-menu").cloneNode(true);
             document.body.appendChild(annotationMenu); // Add to page
@@ -1535,6 +1542,7 @@
                     div.dataset.confidence = value;
                     applyConfidenceColor(div, value);
                 }
+                markTierUnfinished(tier)
             });
             annotationMenu.querySelectorAll('.deleteButton').forEach(okButton => {
                 okButton.addEventListener('click', (event) => {
@@ -1547,6 +1555,7 @@
                     const pitchDiv = document.getElementById('chart');
                     [ pitchDiv].forEach(c => c?.querySelectorAll('.region-overlay')?.forEach(e => e.remove()));
                     countTiersAndAnnotations()
+                    markTierUnfinished(tier)
                 });
             });
         };
@@ -1592,7 +1601,7 @@
         const contextMenu = document.getElementById("context-menu");
         const tierSubmenu = document.getElementById("tier-submenu");
         // Add Interval Tier button logic
-        function addIntervalTier(Category, TierName) {
+        function addIntervalTier(Category, TierName, finished = false) {
             let index = tierContainer.children.length;
             let newTierId;
             // Loop until a non-existing ID is found
@@ -1607,6 +1616,7 @@
             newTier.className = "interval-tier"; // Added as interval-tier
             newTier.dataset.category = Category
             addTierNames(newTier); // Add a name for each tier
+            addTierFinishedCheckbox(newTier, finished);
             tierContainer.appendChild(newTier);
             countTiersAndAnnotations()
             bindTierClickEvent(newTier, "interval"); // Bind click event
@@ -1751,12 +1761,20 @@
             selectedTier.remove();
             selectedTier = null;
             if (tierNameInput) tierNameInput.remove();
+            // Remove the corresponding finished checkbox
+            const tierCheckbox = document.querySelector(`#finish-container [data-tier-id='${tierId}']`);
+            if (tierCheckbox) {
+                const wrapper = tierCheckbox.closest(".toggle-wrapper");
+                if (wrapper) wrapper.remove();
+                else tierCheckbox.remove();
+            }
             regions.clearRegions();
             const pitchDiv = document.getElementById('chart');
             [ pitchDiv].forEach(c => c?.querySelectorAll('.region-overlay')?.forEach(e => e.remove()));
             contextMenu.style.display = "none";
             document.getElementById('deleteTierConfirmDialog').style.display = 'none';
             countTiersAndAnnotations()
+            markTierUnfinished(selectedTier)
         });
 
         document.getElementById('cancelDeleteTier').addEventListener('click', function(){
@@ -1803,6 +1821,38 @@
                 menu6.style.display = "none";
                 updateTierSubmenu();
             })
+        }
+
+        {#function addTierFinishedCheckbox(tier, finished = false) {#}
+        {#    const finishContainer = document.getElementById("finish-container");#}
+        {#    const checkbox = document.createElement("input");#}
+        {#    checkbox.type = "checkbox";#}
+        {#    checkbox.dataset.tierId = tier.id;#}
+        {#    checkbox.checked = finished;#}
+        {#    finishContainer.appendChild(checkbox);#}
+        {#}#}
+
+        function addTierFinishedCheckbox(tier, finished = false) {
+            const finishContainer = document.getElementById("finish-container");
+            const wrapper = document.createElement("label");
+            wrapper.className = "toggle-wrapper";
+            const textSpan = document.createElement("span");
+            textSpan.className = "toggle-text";
+            textSpan.textContent = finished ? "Finished" : "Not Finished";
+            const checkbox = document.createElement("input");
+            checkbox.type = "checkbox";
+            checkbox.className = "toggle-checkbox";
+            checkbox.dataset.tierId = tier.id;
+            checkbox.checked = finished;
+            const slider = document.createElement("span");
+            slider.className = "toggle-slider";
+            wrapper.appendChild(textSpan);
+            wrapper.appendChild(checkbox);
+            wrapper.appendChild(slider);
+            finishContainer.appendChild(wrapper);
+            checkbox.addEventListener("change", () => {
+                textSpan.textContent = checkbox.checked ? "Finished" : "Not Finished";
+            });
         }
 
         // Logic for the Tier delete button
@@ -1901,6 +1951,20 @@
         const annotationCount = annotations.length;
         document.getElementById("tierCount").textContent = tierCount;
         document.getElementById("annotationCount").textContent = annotationCount;
+    }
+
+    function markTierUnfinished(tier) {
+        if (!tier) return;
+        const checkbox = document.querySelector(`#finish-container input[data-tier-id="${tier.id}"]`);
+        if (!checkbox) return;
+        checkbox.checked = false;
+        const wrapper = checkbox.closest(".toggle-wrapper");
+        if (wrapper) {
+            const textSpan = wrapper.querySelector(".toggle-text");
+            if (textSpan) {
+                textSpan.textContent = "Not Finished";
+            }
+        }
     }
 
     function closeAllMenus() {
@@ -2235,6 +2299,14 @@
         });
 
         document.getElementById("backButton").addEventListener("click", async () => {
+            const unfinished = Array.from(document.querySelectorAll("#finish-container input[type='checkbox']")).some(ch => !ch.checked);
+            if (unfinished) {
+                const confirmExit = confirm("⚠️ You still have tiers not marked as Finished.\nDo you really want to exit?");
+                if (!confirmExit) {
+                    return;
+                }
+            }
+
             try {
                 const jsonData = prepareAnnotationPayload();
                 if (jsonData) {
@@ -2264,6 +2336,39 @@
             }
             window.location.href = "{{ URL_PREFIX + url_for('login.general_form') }}";
         });
+
+        {#let noAnnotation = false;#}
+        {#document.getElementById("noAnnotationBtn").addEventListener("click", () => {#}
+        {#    if (!noAnnotation) {#}
+        {#        const ok = confirm("This action will CLEAR ALL TIERS and ALL ANNOTATIONS.\n\nAre you sure?");#}
+        {#        if (!ok) return;#}
+        {#    }#}
+        {#    noAnnotation = !noAnnotation;#}
+        {#    if (noAnnotation) {#}
+        {#        const btn = document.getElementById("noAnnotationBtn");#}
+        {#        btn.classList.remove("btn-warning");#}
+        {#        btn.classList.add("btn-success");#}
+        {#        btn.textContent = "✔ Annotation Not Required";#}
+        {#        // clear all tiers and corresponding name and finishcheckbox#}
+        {#        document.querySelectorAll(".interval-tier, .point-tier").forEach(t => t.remove());#}
+        {#        document.querySelectorAll(".name-input").forEach(n => n.remove());#}
+        {#        document.querySelectorAll("#finish-container input[type='checkbox']").forEach(c => c.remove());#}
+        {#        regions.clearRegions();#}
+        {#        countTiersAndAnnotations();#}
+        {#        document.getElementById("chart").querySelectorAll('.region-overlay').forEach(e => e.remove());#}
+        {#        document.getElementById("add-tier").disabled = true;#}
+        {#        document.getElementById("downloadTextGrid").disabled = true;#}
+        {#        updateNeedAnnotation(false);#}
+        {#    } else {#}
+        {#        const btn = document.getElementById("noAnnotationBtn");#}
+        {#        btn.classList.remove("btn-success");#}
+        {#        btn.classList.add("btn-warning");#}
+        {#        btn.innerHTML = `🚫 No Annotation Needed`;#}
+        {#        document.getElementById("add-tier").disabled = false;#}
+        {#        document.getElementById("downloadTextGrid").disabled = false;#}
+        {#        updateNeedAnnotation(true);#}
+        {#    }#}
+        {#});#}
     });
 
     wavesurfer.on('ready', function () {
@@ -2295,7 +2400,7 @@
             }
             let tier;  // Store the Tier object
             if (tierData.type === "IntervalTier") {
-                tier = addIntervalTier(tierData.category, tierData.name);
+                tier = addIntervalTier(tierData.category, tierData.name, tierData.finished);
             } else if (tierData.type === "TextTier") {
                 tier = addPointTier();
             }
@@ -2322,7 +2427,7 @@
                         id: `point-${tier.name}-${index}` // Generate unique ID
                     };
                 }
-                addAnnotation(tier, data);
+                addAnnotation(tier, data, true);
             });
         });
     }

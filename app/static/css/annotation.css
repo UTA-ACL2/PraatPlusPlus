@@ -106,6 +106,60 @@
     box-shadow: 0 0 5px rgba(0, 123, 255, 0.5);
 }
 
+#finish-container {
+    right: -100px;
+    flex-direction: column;
+    position: absolute;
+    display: flex;
+}
+
+.toggle-wrapper {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 45px;
+    width: 130px;
+    padding: 4px 6px;
+    border-radius: 20px;
+    background: #f3f3f3;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.toggle-checkbox {
+    display: none;
+}
+
+.toggle-slider {
+    position: relative;
+    width: 42px;
+    height: 22px;
+    background-color: #ccc;
+    border-radius: 22px;
+    transition: 0.3s;
+    cursor: pointer;
+}
+
+.toggle-slider::before {
+    content: "";
+    position: absolute;
+    width: 18px;
+    height: 18px;
+    top: 2px;
+    left: 2px;
+    background: white;
+    border-radius: 50%;
+    transition: 0.3s;
+}
+
+.toggle-checkbox:checked + .toggle-slider {
+    background-color: #34c759;
+}
+
+.toggle-checkbox:checked + .toggle-slider::before {
+    transform: translateX(20px);
+}
+
 .context-menu {
     position: fixed;
     background-color: white;

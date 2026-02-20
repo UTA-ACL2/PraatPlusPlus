@@ -80,7 +80,7 @@ def general():
         # If all three files exist, load them directly
         if file_exists(audio_file_path_mp4, audio_file_path_wav, graph_file_path):
             return jsonify({
-                "redirect": URL_PREFIX + url_for("general.viewer", username=username, fileName=audio_basename, folderName=folder_name)
+                "redirect": URL_PREFIX + url_for("general.viewer", username=username, fileName=audio_filename, folderName=folder_name)
             })
 
         # Otherwise reprocess
@@ -131,7 +131,7 @@ def general():
         #     return jsonify({"error": f"pitchIntensityScript failed: {str(e)}"}), 500
 
         return jsonify({
-            "redirect": URL_PREFIX + url_for("general.viewer", username=username, fileName=audio_basename, folderName=folder_name)
+            "redirect": URL_PREFIX + url_for("general.viewer", username=username, fileName=audio_filename, folderName=folder_name)
         })
 
     except Exception as e:
@@ -143,7 +143,7 @@ def viewer():
     username = request.args.get("username")
     file_name = request.args.get("fileName")
     folder_name = request.args.get("folderName")
-    base = f"{URL_PREFIX}/static/videos/pool/{username}/{folder_name}/annotation/{file_name}/{file_name}"
+    base = f"{URL_PREFIX}/static/videos/pool/{username}/{folder_name}/annotation/{os.path.splitext(file_name)[0]}/{os.path.splitext(file_name)[0]}"
     return render_template(
         "viewer.html",
         audioFile=f"{base}.wav",
