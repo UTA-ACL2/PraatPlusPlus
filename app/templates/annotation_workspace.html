@@ -28,6 +28,7 @@
                 <a href="{{ URL_PREFIX + url_for('login.logout') }}" class="btn btn-primary">Logout</a>
                 <button id="backButton" class="btn btn-primary">Back</button>
 {#                <button id="noAnnotationBtn" class="btn btn-warning" style="font-weight: bold; margin-top: 20px">🚫 No Annotation Needed"</button>#}
+                <button id="preannotateBtn" class="btn btn-warning" style="font-weight: bold;">Pre-annotate</button>
             </div>
             <!-- Right-side video display area -->
             <div style="flex: 2;">
@@ -193,7 +194,7 @@
         <div id="tier-submenu" class="context-submenu" style="display: none;"></div>
 
         <div class="col-xs-6">
-            <button id="add-tier" class="btn btn-textgrid btn-lg">+ Add Tier</button>
+            <button id="add-tier" class="btn btn-primary btn-lg">+ Add Tier</button>
         </div>
         <!-- Dialog box for selecting Tier type -->
         <div id="tierTypeDialog" class="overlay">
@@ -258,7 +259,7 @@
             </div>
         </div>
         <div class="col-xs-6 text-right" style="width: 40%; justify-content: space-between;" >
-            <button id="downloadTextGrid" class="btn btn-textgrid btn-lg">Export</button>
+            <button id="downloadTextGrid" class="btn btn-primary btn-lg">Export</button>
         </div>
 
         <div id="spectrogramDialog" class="overlay" style="display: none;">
@@ -270,6 +271,26 @@
                 <input type="number" id="specMaxHz" placeholder="e.g. 5000">
                 <button id="saveSpectrogram">Save</button>
                 <button id="cancelSpectrogram">Cancel</button>
+            </div>
+        </div>
+
+        <!-- Pre-annotation dialog -->
+        <div id="preannotateDialog" class="overlay" style="display:none;">
+            <div class="dialog">
+                <h3>AI Pre-annotation</h3>
+                <label for="pre_eventLabel">Event Label:</label>
+                <select id="pre_eventLabel" style="width:100%; margin-bottom:10px;"></select>
+                <label for="pre_threshold">Threshold (0~1):</label>
+                <input id="pre_threshold" type="number" min="0" max="1" step="0.01" value="0.5" style="width:100%; margin-bottom:10px;"/>
+                <label for="pre_minDur">Min Duration (sec):</label>
+                <input id="pre_minDur" type="number" min="0" step="0.1" value="0.3" style="width:100%; margin-bottom:10px;"/>
+                <label for="pre_targetTier">Target Tier:</label>
+                <select id="pre_targetTier" style="width:100%; margin-bottom:10px;"></select>
+                <div style="display:flex; justify-content: space-between; gap: 10px; margin-top: 12px;">
+                    <button id="pre_run" class="btn btn-danger">Run (Overwrite)</button>
+                    <button id="pre_cancel" class="btn btn-default">Cancel</button>
+                </div>
+                <p id="pre_status" style="margin-top:10px; color:#444; display:none;"></p>
             </div>
         </div>
 
@@ -402,6 +423,19 @@
             SpectrowindowPlugin
         ],
     });
+
+    // Pre-annotation mode flag
+    window.preannotateState = {
+        running: false,
+        reason: ""
+    };
+
+    function setPreannotateRunning(isRunning, reason = "") {
+        window.preannotateState.running = isRunning;
+        window.preannotateState.reason = reason;
+        console.log("[preannotate] running =", isRunning, reason);
+    }
+
 
     let isintervalSelecting = false
     const container = document.querySelector(`${wavesurfer.options.container} > div`);
@@ -1090,6 +1124,10 @@
                 .datum(data)
                 .attr("class", "line1 color2")
                 .attr("d", valueline);
+
+            requestAnimationFrame(function () {
+                zoom(width);
+            });
         });
 
         svg.append("line")
@@ -1137,37 +1175,35 @@
         width = value;
         x = d3.time.scale().range([0, width]);
 
-        $(".y.axis.a-right").attr("transform", "translate(" + Math.min($("#lines").outerWidth(), $("#chart").outerWidth()) + " ,0)");
+        $(".y.axis.a-right").attr(
+            "transform",
+            "translate(" + Math.min($("#lines").outerWidth(), $("#chart").outerWidth()) + " ,0)"
+        );
 
-        d3.tsv("{{ graphData }}", function (error, data)  {
-            var svg = d3.select("#drawings").transition();
+        if (!graphData || graphData.length === 0) return;
 
-            data.forEach(function (d) {
-                d.time = parseFloat(d.time) * 1000;
-                d.pitch = +d.pitch;
-                d.intensity = +d.intensity;
-            });
+        var svg = d3.select("#drawings").transition();
 
-            x.domain(d3.extent(data, function (d) {
-                return d.time;
-            }));
+        x.domain(d3.extent(graphData, function (d) {
+            return d.time;
+        }));
 
-            xAxis = d3.svg.axis().scale(x)
-                .orient("bottom").ticks(getSmartTickCount(x))
-                .tickFormat(generateTickFormat());
+        xAxis = d3.svg.axis().scale(x)
+            .orient("bottom")
+            .ticks(getSmartTickCount(x))
+            .tickFormat(generateTickFormat());
 
-            svg.select(".line1")
-                .duration(0)
-                .attr("d", valueline(data));
+        svg.select(".line1")
+            .duration(0)
+            .attr("d", valueline(graphData));
 
-            svg.select(".line2")
-                .duration(0)
-                .attr("d", valueline2(data));
+        svg.select(".line2")
+            .duration(0)
+            .attr("d", valueline2(graphData));
 
-            svg.select(".x.axis") // change the x axis
-                .duration(0)
-                .call(xAxis);
-        });
+        svg.select(".x.axis")
+            .duration(0)
+            .call(xAxis);
     }
 
     function generateTickFormat() {
@@ -2277,10 +2313,37 @@
     });
 
     let currentUsername = "{{ userName }}";
+
+    function startLockHeartbeat() {
+        setInterval(() => {
+            console.log("heartbeat fired", new Date().toISOString());
+            fetch("{{ URL_PREFIX }}/touch_lock", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    username: currentUsername,
+                    filename: fileName
+                })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (!data.success) {
+                    console.warn("Lock heartbeat failed:", data.message);
+                }
+            })
+            .catch(err => {
+                console.error("Lock heartbeat error:", err);
+            });
+        }, 60000); // heartbeat every 5 seconds
+    }
+
     document.addEventListener("DOMContentLoaded", function () {
         const videoElement = document.querySelector("video");
         if (videoElement) {
             setInterval(autoSaveAnnotations, 120000);
+            startLockHeartbeat();
         }
         let currentLockedFile = fileName;
         window.addEventListener("beforeunload", function () {
@@ -2334,7 +2397,7 @@
                 alert("Saving or unlocking failed. Please refresh and try again!！");
                 return;
             }
-            window.location.href = "{{ URL_PREFIX + url_for('login.general_form') }}";
+            window.location.href = "{{ URL_PREFIX + url_for('login.file_pool') }}";
         });
 
         {#let noAnnotation = false;#}
@@ -2459,6 +2522,12 @@
     }
 
     function autoSaveAnnotations() {
+
+        if (window.preannotateState?.running) {
+            console.log("[autosave] skipped (pre-annotate running)");
+            return;
+        }
+
         const jsonData = prepareAnnotationPayload();
         if (!jsonData) return;
 
@@ -2496,6 +2565,12 @@
     }
 
     function autoSaveOnExit() {
+
+        if (window.preannotateState?.running) {
+            console.log("[autosave] skipped (pre-annotate running)");
+            return;
+        }
+
         const jsonData = prepareAnnotationPayload();
         if (!jsonData) return;
         const blob = new Blob([JSON.stringify(jsonData)], {
@@ -2730,6 +2805,159 @@
             document.querySelectorAll(`.name-input[title="${category}"]`).forEach(input => input.remove());
         }
     });
+
+        // -------- Pre-annotation dialog logic --------
+        const btn = document.getElementById("preannotateBtn");
+        const dialog = document.getElementById("preannotateDialog");
+        const selLabel = document.getElementById("pre_eventLabel");
+        const inpTh = document.getElementById("pre_threshold");
+        const inpDur = document.getElementById("pre_minDur");
+        const selTier = document.getElementById("pre_targetTier");
+        const runBtn = document.getElementById("pre_run");
+        const cancelBtn = document.getElementById("pre_cancel");
+        const statusP = document.getElementById("pre_status");
+
+        function showDialog() {
+            dialog.style.display = "flex";
+            statusP.style.display = "none";
+            statusP.textContent = "";
+        }
+        function hideDialog() {
+            dialog.style.display = "none";
+        }
+        function setStatus(msg) {
+            statusP.style.display = "block";
+            statusP.textContent = msg;
+        }
+
+        function loadLabelOptions() {
+            const labels = [
+                "Speech",
+                "Dog",
+                "Bark",
+                "Music",
+                "Silence"
+            ];
+            selLabel.innerHTML = "";
+            labels.forEach(l => {
+                const opt = document.createElement("option");
+                opt.value = l;
+                opt.textContent = l;
+                selLabel.appendChild(opt);
+            });
+        }
+
+        function loadTierOptions() {
+            if (!selTier) return;
+            const tiers = Array.from(document.querySelectorAll("#tier-control > div"));
+            selTier.innerHTML = "";
+            tiers.forEach(tier => {
+                const tierId = tier.id;
+                const tierInput = document.getElementById(`${tierId}name`);
+                const tierName = tierInput?.value || tierId;
+                const opt = document.createElement("option");
+                opt.value = tierName;
+                opt.textContent = tierName;
+                selTier.appendChild(opt);
+            });
+            if (selectedTier && selectedTier.id) {
+                selTier.value = document.getElementById(`${selectedTier.id}name`)?.value || selectedTier.id;
+            }
+        }
+
+        function getContext() {
+            const username = "{{ userName }}";
+            const filename = "{{ fileName }}";
+            return { username, filename };
+        }
+
+        btn.addEventListener("click", async () => {
+            loadLabelOptions();
+            loadTierOptions();
+            showDialog();
+        });
+        cancelBtn.addEventListener("click", () => hideDialog());
+
+        runBtn.addEventListener("click", async () => {
+            const event_label = selLabel.value;
+            const threshold = parseFloat(inpTh.value);
+            const min_duration_sec = parseFloat(inpDur.value);
+            const target_tier = selTier.value;
+
+            if (!target_tier) {
+                alert("Please select a target tier.");
+                return;
+            }
+            if (Number.isNaN(threshold) || threshold < 0 || threshold > 1) {
+                alert("Threshold must be between 0 and 1.");
+                return;
+            }
+            if (Number.isNaN(min_duration_sec) || min_duration_sec < 0) {
+                alert("Min duration must be >= 0.");
+                return;
+            }
+
+            const ok = confirm(
+                `Pre-annotation will CLEAR all regions in tier "${target_tier}".\nContinue?`
+            );
+            if (!ok) return;
+
+            try {
+                const jsonData = prepareAnnotationPayload();
+                if (jsonData) {
+                    await fetch(`{{ URL_PREFIX }}/save_annotation`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify(jsonData)
+                    });
+                    console.log("Annotation saved before leaving.");
+                }
+            } catch (err) {
+                console.error("Error saving before pre-annotation:", err);
+                alert("Save failed. Please try again before running pre-annotation.");
+                return;
+            }
+
+            runBtn.disabled = true;
+            setStatus("Running pre-annotation...");
+
+            try {
+                setPreannotateRunning(true, "preannotating");
+
+                const ctx = getContext();
+                const payload = {
+                    username: ctx.username,
+                    filename: ctx.filename,
+                    event_label,
+                    threshold,
+                    min_duration_sec,
+                    target_tier_name: target_tier,
+                    overwrite: true
+                };
+
+                const resp = await fetch("{{ URL_PREFIX }}/api/preannotate/file", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!resp.ok) {
+                    {#setPreannotateRunning(false, "finished");#}
+                    throw new Error(await resp.text());
+                }
+
+                // Success: reload to re-inject annotations from disk
+                setStatus("Done. Reloading...");
+                window.location.reload();
+            } catch (e) {
+                console.error(e);
+                alert("Pre-annotation failed: " + e.message);
+                setPreannotateRunning(false, "finished");
+                runBtn.disabled = false;
+                setStatus("Error");
+            }
+        });
+
 </script>
 </body>
 </html>

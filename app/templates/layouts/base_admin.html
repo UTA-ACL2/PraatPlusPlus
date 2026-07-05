@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>{% block title %}Praat++ Admin{% endblock %}</title>
+    <link href="{{ URL_PREFIX + url_for('static', filename='assets/css/material-dashboard.css') }}" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    {% block extra_css %}{% endblock %}
+</head>
+<body class="g-sidenav-show bg-gray-100">
+{% set ep = request.endpoint %}
+<!-- ================= Sidebar ================= -->
+<aside class="sidenav navbar navbar-vertical navbar-expand-xs
+              border-0 border-radius-xl my-3 fixed-start ms-3
+              bg-gradient-dark"
+       id="sidenav-main">
+    <div class="sidenav-header">
+        <a class="navbar-brand m-0" >
+            <img src="{{ URL_PREFIX + url_for('static', filename='assets/img/logo-ct.png') }}"
+                 class="navbar-brand-img h-100">
+            <span class="ms-1 font-weight-bold text-white">
+                Praat++
+            </span>
+        </a>
+    </div>
+    <hr class="horizontal light mt-0 mb-2">
+
+    <div class="collapse navbar-collapse w-auto max-height-vh-100">
+        <ul class="navbar-nav">
+            <!-- File Pool -->
+            <li class="nav-item">
+                <a class="nav-link text-white {% if ep == 'login.file_pool' %}active bg-gradient-primary{% endif %}"
+   href="{{ URL_PREFIX + url_for('login.file_pool') }}">
+                    <div class="text-white text-center me-2 d-flex align-items-center justify-content-center">
+                        <i class="material-icons opacity-10">folder</i>
+                    </div>
+                    <span class="nav-link-text ms-1">File Pool</span>
+                </a>
+            </li>
+
+            <!-- Statistics -->
+            <li class="nav-item">
+                <a class="nav-link text-white {% if ep == 'stats.statistics_page' %}active bg-gradient-primary{% endif %}"
+   href="{{ URL_PREFIX + url_for('stats.statistics_page') }}">
+                    <div class="text-white text-center me-2 d-flex align-items-center justify-content-center">
+                        <i class="material-icons opacity-10">bar_chart</i>
+                    </div>
+                    <span class="nav-link-text ms-1">Statistics</span>
+                </a>
+            </li>
+
+            <!-- Profile -->
+{#            <li class="nav-item">#}
+{#                <a class="nav-link text-white {% if segment == 'profile' %}active bg-gradient-primary{% endif %}"#}
+{#                   href="{{ url_for('profile') }}">#}
+{#                    <div class="text-white text-center me-2 d-flex align-items-center justify-content-center">#}
+{#                        <i class="material-icons opacity-10">person</i>#}
+{#                    </div>#}
+{#                    <span class="nav-link-text ms-1">Profile</span>#}
+{#                </a>#}
+{#            </li>#}
+{##}
+            <!-- Logout -->
+            <li class="nav-item">
+                <a class="nav-link text-white"
+                   href="{{ URL_PREFIX + url_for('login.logout') }}">
+                    <div class="text-white text-center me-2 d-flex align-items-center justify-content-center">
+                        <i class="material-icons opacity-10">logout</i>
+                    </div>
+                    <span class="nav-link-text ms-1">Logout</span>
+                </a>
+            </li>
+
+        </ul>
+    </div>
+</aside>
+<!-- ================= End Sidebar ================= -->
+
+<!-- ================= Main Content ================= -->
+<main class="main-content position-relative border-radius-lg">
+    <div class="container-fluid py-4">
+        {% block content %}{% endblock %}
+    </div>
+</main>
+<!-- ================= End Main Content ================= -->
+<script src="{{ URL_PREFIX + url_for('static', filename='assets/js/core/bootstrap.bundle.min.js') }}"></script>
+<script src="{{ URL_PREFIX + url_for('static', filename='assets/js/material-dashboard.min.js') }}"></script>
+{% block extra_js %}{% endblock %}
+</body>
+</html>

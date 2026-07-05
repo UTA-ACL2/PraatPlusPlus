@@ -6,8 +6,8 @@ from app.config import URL_PREFIX
 
 login_bp = Blueprint('login', __name__)
 
-VALID_ACCOUNTS = ["peter", "kenny", "theron", "tuan", "wonjun", "hridayesh", "birds", "cats", "corvids", "guest", "lindsay", "rayyan", "abhipsa"]
-SUPER_USERS = ["peter", "kenny", "theron"]
+VALID_ACCOUNTS = ["peter", "kenny", "theron", "tuan", "jeorge", "wonjun", "hridayesh", "birds", "cats", "corvids", "guest", "lindsay", "rayyan", "abhipsa"]
+SUPER_USERS = ["peter", "kenny", "theron", "tuan", "jeorge", "wonjun", "hridayesh", "lindsay", "rayyan", "abhipsa"]
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))  # Get the 'app/' directory
 USER_FILE = os.path.join(BASE_DIR, 'users.json')  # User password file path
 
@@ -46,12 +46,12 @@ def login():
             os.makedirs(default_user_folder_path, exist_ok=True)
             session['username'] = username
             session['current_folder'] = default_folder
-            return render_template('general_form.html', username=session['username'], message=f"First login. Password set successfully. Please remember it!")
+            return render_template('file_pool.html', username=session['username'], message=f"First login. Password set successfully. Please remember it!")
 
             #  Future logins → Verify password
         if check_password_hash(users[username], password):
             session['username'] = username
-            return redirect(URL_PREFIX + url_for('login.general_form'))
+            return redirect(URL_PREFIX + url_for('login.file_pool'))
         else:
             return render_template('login.html', error="Incorrect password")
 
@@ -65,8 +65,8 @@ def logout():
     return redirect(URL_PREFIX + url_for('login.login'))  # Redirect to the login page after logout
 
 
-@login_bp.route('/general_form')
-def general_form():
+@login_bp.route('/file_pool')
+def file_pool():
     # Ensure that only logged-in users can access
     if 'username' not in session:
         return redirect(URL_PREFIX + url_for('login.login'))  # Redirect unauthenticated users to `/login`
@@ -86,7 +86,7 @@ def general_form():
     else:
         print(f"Using existing folder '{folder}' for user '{username}'")
 
-    return render_template('general_form.html', username=session['username'], acting_username=session.get('acting_username', session['username']), VALID_ACCOUNTS = VALID_ACCOUNTS, SUPER_USERS = SUPER_USERS)
+    return render_template('file_pool.html', username=session['username'], acting_username=session.get('acting_username', session['username']), VALID_ACCOUNTS = VALID_ACCOUNTS, SUPER_USERS = SUPER_USERS)
 
 @login_bp.route('/switch_user', methods=['POST'])
 def switch_user():

@@ -1,16 +1,22 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <title>Praat++ File Pool</title>
-    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css">
-    <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js"></script>
-    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js"></script>
+{% extends "layouts/base_admin.html" %}
+
+{% block title %}Praat++ File Pool{% endblock %}
+
+{% block extra_css %}
+{#<!DOCTYPE html>#}
+{#<html>#}
+{#<head>#}
+{#    <meta charset="UTF-8">#}
+{#    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css">#}
+{#    <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js"></script>#}
+{#    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js"></script>#}
     <link href="{{ URL_PREFIX + url_for('static', filename='css/general.css') }}" rel="stylesheet" type="text/css">
     <link href="{{ URL_PREFIX + url_for('static', filename='css/pool.css') }}" rel="stylesheet" type="text/css">
-</head>
-<body>
-<div class="container">
+{#</head>#}
+{#<body>#}
+{% endblock %}
+{% block content %}
+{#<div class="container" style="max-width: 1470px; margin: 0 auto; padding: 0 15px;">#}
     <div id="poolContainer" class="file-manager" style="display: none;">
         <h3>
             File Pool for <span id="userDisplay"></span>
@@ -40,27 +46,81 @@
         <div id="folderPanel" style="display: block">
             <div class="folder-grid"></div>
         </div>
-        <form action="{{ URL_PREFIX + url_for('upload.upload_files') }}" method="post" enctype="multipart/form-data" id="runForm">
-            <div style="display: flex; align-items: center">
-                <label for="audioFile">Upload video or audio file:</label>
-                <input type="file" id="audioFile" name="audioFile" class="fileInput" multiple accept=".mp4,video/mp4,.wav,audio/wav,.mp3,audio/mpeg">
-                <div id="errorMessage" style="color: #FF0000;"></div>
-                <button type="button" id="runButton" style="padding: 5px 10px;
-                    margin: 0 5px;
-                    border: none;
-                    background: #007bff;
-                    color: white;
-                    cursor: pointer;
-                    border-radius: 5px;">Upload</button>
-                <button type="button" id="exportButton" title="Export all labeled files" style="padding: 5px 10px;
-                    margin: 0 5px;
-                    border: none;
-                    background: #007bff;
-                    color: white;
-                    cursor: pointer;
-                    border-radius: 5px;">Export All</button>
-            </div>
-        </form>
+{#        <form action="{{ URL_PREFIX + url_for('upload.upload_files') }}" method="post" enctype="multipart/form-data" id="runForm">#}
+{#            <div style="display: flex; align-items: center">#}
+{#                <label for="audioFile">Upload video or audio file:</label>#}
+{#                <input type="file" id="audioFile" name="audioFile" class="fileInput" multiple accept=".mp4,video/mp4,.wav,audio/wav,.mp3,audio/mpeg">#}
+{#                <div id="errorMessage" style="color: #FF0000;"></div>#}
+{#                <button type="button" id="runButton" style="padding: 5px 10px;#}
+{#                    margin: 0 5px;#}
+{#                    border: none;#}
+{#                    background: #007bff;#}
+{#                    color: white;#}
+{#                    cursor: pointer;#}
+{#                    border-radius: 5px;">Upload</button>#}
+{#                <button type="button" id="exportButton" title="Export all labeled files" style="padding: 5px 10px;#}
+{#                    margin: 0 5px;#}
+{#                    border: none;#}
+{#                    background: #007bff;#}
+{#                    color: white;#}
+{#                    cursor: pointer;#}
+{#                    border-radius: 5px;">Export All</button>#}
+{#            </div>#}
+{#        </form>#}
+
+    <form action="{{ URL_PREFIX + url_for('upload.upload_files') }}" method="post" enctype="multipart/form-data" id="runForm">
+    <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+        <label for="uploadFile">Upload media or TextGrid:</label>
+        <input
+            type="file"
+            id="uploadFile"
+            name="uploadFile"
+            class="fileInput"
+            multiple
+            accept=".mp4,video/mp4,.wav,audio/wav,.mp3,audio/mpeg,.TextGrid,.textgrid"
+        >
+        <div id="errorMessage" style="color: #FF0000;"></div>
+
+        <button
+            type="button"
+            id="runButton"
+            style="padding: 5px 10px;
+                   margin: 0 5px;
+                   border: none;
+                   background: #007bff;
+                   color: white;
+                   cursor: pointer;
+                   border-radius: 5px;">
+            Upload
+        </button>
+
+        <button
+            type="button"
+            id="exportButton"
+            title="Export all labeled files"
+            style="padding: 5px 10px;
+                   margin: 0 5px;
+                   border: none;
+                   background: #007bff;
+                   color: white;
+                   cursor: pointer;
+                   border-radius: 5px;">
+            Export All
+        </button>
+    </div>
+</form>
+
+
+{#    <div style="display: flex; align-items: center; gap: 8px;">#}
+{#        <label for="textgridFile">Import TextGrid:</label>#}
+{#        <input type="file" id="textgridFile" name="textgridFile" class="fileInput"#}
+{#               multiple accept=".TextGrid,.textgrid">#}
+{#        <button type="button" id="uploadTextGridButton"#}
+{#                style="padding: 5px 10px; margin: 0 5px; border: none; background: #28a745; color: white; cursor: pointer; border-radius: 5px;">#}
+{#            Import#}
+{#        </button>#}
+{#    </div>#}
+
         <div class="file-header">
             <div class="col name sortable">Name<span class="sort-icons"><i class="sort-arrow up"></i><i class="sort-arrow down"></i></span></div>
             <div class="col type sortable">Type<span class="sort-icons"><i class="sort-arrow up"></i><i class="sort-arrow down"></i></span></div>
@@ -75,12 +135,13 @@
             <span id="pageInfo">Page 1</span>
             <button id="nextPage">Next</button>
         </div>
-    </div>
+{#    </div>#}
 </div>
 <ul id="filePoolItemContextMenu" class="context-menu">
     <li id="deleteFileOption">Delete</li>
 </ul>
-
+{% endblock %}
+{% block extra_js %}
 {% if username %}
     <script>
         {% if message %}
@@ -223,102 +284,324 @@
                 }
             });
 
-            const audioInput = document.getElementById('audioFile');
-            const runButton = document.getElementById('runButton');
-            const errorMessage = document.getElementById('errorMessage');
-            // Check the file format and whether the file is selected
-            function validateFile() {
-                const file = audioInput.files[0];
-                errorMessage.textContent = '';
+            {#const audioInput = document.getElementById('audioFile');#}
+            {#const runButton = document.getElementById('runButton');#}
+            {#const errorMessage = document.getElementById('errorMessage');#}
+            {#const textgridInput = document.getElementById('textgridFile');#}
+            {#const uploadTextGridButton = document.getElementById('uploadTextGridButton');#}
+            {#// Check the file format and whether the file is selected#}
+            {#function validateFile() {#}
+            {#    const file = audioInput.files[0];#}
+            {#    errorMessage.textContent = '';#}
+            {##}
+            {#    if (!file) {#}
+            {#        errorMessage.textContent = 'No video or audio provided';#}
+            {#        return false;#}
+            {#    }#}
+            {##}
+            {#    const fileName = file.name.toLowerCase();#}
+            {#    if (!(fileName.endsWith('.mp4') || fileName.endsWith('.wav') || fileName.endsWith('.mp3'))) {#}
+            {#        errorMessage.textContent = 'Please upload MP4, MP3, WAV file';#}
+            {#        return false;#}
+            {#    }#}
+            {##}
+            {#    // If the file is valid, remove the error message#}
+            {#    errorMessage.textContent = '';#}
+            {#    return true;#}
+            {#}#}
+            {##}
+            {#// Trigger validation when the Run button is clicked#}
+            {#runButton.addEventListener('click', (event) => {#}
+            {#    if (!validateFile()) {#}
+            {#        event.preventDefault(); // Prevent form submission#}
+            {#    }#}
+            {#});#}
+            {##}
+            {#// Trigger validation when file selection changes#}
+            {#audioInput.addEventListener('change', () => {#}
+            {#    validateFile();#}
+            {#});#}
+            {##}
+            {#function validateTextGridFiles() {#}
+            {#    const files = Array.from(textgridInput.files);#}
+            {#    errorMessage.textContent = '';#}
+            {##}
+            {#    if (!files.length) {#}
+            {#        errorMessage.textContent = 'No TextGrid file selected';#}
+            {#        return false;#}
+            {#    }#}
+            {##}
+            {#    for (const file of files) {#}
+            {#        const fileName = file.name.toLowerCase();#}
+            {#        if (!fileName.endsWith('.textgrid')) {#}
+            {#            errorMessage.textContent = 'Please upload only TextGrid files';#}
+            {#            return false;#}
+            {#        }#}
+            {#    }#}
+            {##}
+            {#    errorMessage.textContent = '';#}
+            {#    return true;#}
+            {#}#}
+            {##}
+            {#uploadTextGridButton.addEventListener('click', async () => {#}
+            {#    if (!validateTextGridFiles()) {#}
+            {#        return;#}
+            {#    }#}
+            {##}
+            {#    const files = Array.from(textgridInput.files);#}
+            {#    const formData = new FormData();#}
+            {##}
+            {#    for (const file of files) {#}
+            {#        formData.append("textgridFile", file);#}
+            {#    }#}
+            {##}
+            {#    try {#}
+            {#        const res = await fetch("{{ URL_PREFIX + url_for('upload.upload_textgrid') }}", {#}
+            {#            method: "POST",#}
+            {#            body: formData#}
+            {#        });#}
+            {##}
+            {#        if (res.ok) {#}
+            {#            window.location.reload();#}
+            {#        } else {#}
+            {#            alert("TextGrid import failed!");#}
+            {#        }#}
+            {#    } catch (err) {#}
+            {#        console.error("TextGrid upload failed:", err);#}
+            {#        alert("TextGrid upload failed!");#}
+            {#    }#}
+            {#});#}
+            {##}
+            {#document.getElementById('runButton').addEventListener('click', async () => {#}
+            {#    const fileInput = document.getElementById('audioFile');#}
+            {#    const files = Array.from(fileInput.files);#}
+            {#    const formData = new FormData();#}
+            {##}
+            {#    for (const file of files) {#}
+            {#        const ext = file.name.split('.').pop();#}
+            {#        let baseName = file.name.substring(0, file.name.lastIndexOf('.'));#}
+            {#        function sanitizeFileName(name) {#}
+            {#            return name#}
+            {#                .replace(/[^\w]/g, '_')        // Replace invalid characters with `_`#}
+            {#                .replace(/_+/g, '_')           // Merge consecutive `_`#}
+            {#                .replace(/^_+|_+$/g, '');      // Remove leading and trailing `_`#}
+            {#        }#}
+            {#        baseName = sanitizeFileName(baseName);#}
+            {#        let finalName = baseName;#}
+            {#        let override = false;#}
+            {##}
+            {#        // Check for duplicate names#}
+            {#        const checkRes = await fetch(`{{URL_PREFIX}}/check_file_exists?username=${username}&videoName=${finalName}`);#}
+            {#        const { exists } = await checkRes.json();#}
+            {##}
+            {#        if (exists) {#}
+            {#            const confirmOverwrite = confirm(`File "${finalName}" already exists. Do you want to overwrite it? (previous annotation will be deleted)`);#}
+            {#            if (confirmOverwrite) {#}
+            {#                override = true;#}
+            {#            } else {#}
+            {#                // Automatically generate bark_2, bark_3, ... until a unique name is found#}
+            {#                let index = 2;#}
+            {#                while (true) {#}
+            {#                    const newName = `${baseName}_${index}`;#}
+            {#                    const check = await fetch(`{{URL_PREFIX}}/check_file_exists?username=${username}&videoName=${newName}`);#}
+            {#                    const { exists: existsAlt } = await check.json();#}
+            {#                    if (!existsAlt) {#}
+            {#                        finalName = newName;#}
+            {#                        break;#}
+            {#                    }#}
+            {#                    index++;#}
+            {#                }#}
+            {#            }#}
+            {#        }#}
+            {#        // Create a renamed File object#}
+            {#        const renamedFile = new File([file], `${finalName}.${ext}`, { type: file.type });#}
+            {#        // Add to FormData#}
+            {#        formData.append("audioFile", renamedFile);#}
+            {#        formData.append(`override_${finalName}`, override); // Let the backend identify whether the annotation subdirectory needs to be cleared#}
+            {#    }#}
+            {#    // Submit#}
+            {#    const form = document.getElementById('runForm');#}
+            {#    const action = form.getAttribute('action');#}
+            {#    const res = await fetch(action, {#}
+            {#        method: 'POST',#}
+            {#        body: formData#}
+            {#    });#}
+            {#    if (res.ok) {#}
+            {#        window.location.reload();#}
+            {#    } else {#}
+            {#        alert(" Upload failed！");#}
+            {#    }#}
+            {#});#}
 
-                if (!file) {
-                    errorMessage.textContent = 'No video or audio provided';
-                    return false;
+
+                const fileInput = document.getElementById('uploadFile');
+const runButton = document.getElementById('runButton');
+const errorMessage = document.getElementById('errorMessage');
+
+function sanitizeFileName(name) {
+    return name
+        .replace(/[^\w]/g, '_')
+        .replace(/_+/g, '_')
+        .replace(/^_+|_+$/g, '');
+}
+
+function getFileType(fileName) {
+    const lower = fileName.toLowerCase();
+    if (lower.endsWith('.mp4') || lower.endsWith('.wav') || lower.endsWith('.mp3')) {
+        return 'media';
+    }
+    if (lower.endsWith('.textgrid')) {
+        return 'textgrid';
+    }
+    return 'unsupported';
+}
+
+function validateFiles() {
+    const files = Array.from(fileInput.files);
+    errorMessage.textContent = '';
+
+    if (!files.length) {
+        errorMessage.textContent = 'No file selected';
+        return false;
+    }
+
+    for (const file of files) {
+        const type = getFileType(file.name);
+        if (type === 'unsupported') {
+            errorMessage.textContent = `Unsupported file type: ${file.name}`;
+            return false;
+        }
+    }
+
+    return true;
+}
+
+fileInput.addEventListener('change', validateFiles);
+
+runButton.addEventListener('click', async (event) => {
+    if (!validateFiles()) {
+        event.preventDefault();
+        return;
+    }
+
+    const files = Array.from(fileInput.files);
+    const mediaFiles = [];
+    const textgridFiles = [];
+
+    for (const file of files) {
+        const type = getFileType(file.name);
+        if (type === 'media') {
+            mediaFiles.push(file);
+        } else if (type === 'textgrid') {
+            textgridFiles.push(file);
+        }
+    }
+
+    const renameMap = {};   // original sanitized basename -> final basename after rename/override
+    const mediaFormData = new FormData();
+    const textgridFormData = new FormData();
+
+    try {
+        // Step 1: upload media first
+        for (const file of mediaFiles) {
+            const ext = file.name.split('.').pop();
+            const rawBaseName = file.name.substring(0, file.name.lastIndexOf('.'));
+            const sanitizedBaseName = sanitizeFileName(rawBaseName);
+
+            let finalName = sanitizedBaseName;
+            let override = false;
+
+            const checkRes = await fetch(`{{URL_PREFIX}}/check_file_exists?username=${username}&videoName=${finalName}`);
+            const { exists } = await checkRes.json();
+
+            if (exists) {
+                const confirmOverwrite = confirm(
+                    `File "${finalName}" already exists. Do you want to overwrite it? (previous annotation will be deleted)`
+                );
+
+                if (confirmOverwrite) {
+                    override = true;
+                } else {
+                    let index = 2;
+                    while (true) {
+                        const newName = `${sanitizedBaseName}_${index}`;
+                        const check = await fetch(`{{URL_PREFIX}}/check_file_exists?username=${username}&videoName=${newName}`);
+                        const { exists: existsAlt } = await check.json();
+                        if (!existsAlt) {
+                            finalName = newName;
+                            break;
+                        }
+                        index++;
+                    }
                 }
-
-                const fileName = file.name.toLowerCase();
-                if (!(fileName.endsWith('.mp4') || fileName.endsWith('.wav') || fileName.endsWith('.mp3'))) {
-                    errorMessage.textContent = 'Please upload MP4, MP3, WAV file';
-                    return false;
-                }
-
-                // If the file is valid, remove the error message
-                errorMessage.textContent = '';
-                return true;
             }
 
-            // Trigger validation when the Run button is clicked
-            runButton.addEventListener('click', (event) => {
-                if (!validateFile()) {
-                    event.preventDefault(); // Prevent form submission
-                }
+            renameMap[sanitizedBaseName] = finalName;
+
+            const renamedFile = new File([file], `${finalName}.${ext}`, { type: file.type });
+            mediaFormData.append("audioFile", renamedFile);
+            mediaFormData.append(`override_${finalName}`, override);
+        }
+
+        if (mediaFiles.length > 0) {
+            const form = document.getElementById('runForm');
+            const action = form.getAttribute('action');
+
+            const mediaRes = await fetch(action, {
+                method: 'POST',
+                body: mediaFormData
             });
 
-            // Trigger validation when file selection changes
-            audioInput.addEventListener('change', () => {
-                validateFile();
+            if (!mediaRes.ok) {
+                alert("Media upload failed!");
+                return;
+            }
+        }
+
+        // Step 2: upload textgrid after media upload
+        for (const file of textgridFiles) {
+            const rawBaseName = file.name.substring(0, file.name.lastIndexOf('.'));
+            const sanitizedBaseName = sanitizeFileName(rawBaseName);
+
+            // If paired media got renamed, TextGrid should follow the same basename
+            const finalBaseName = renameMap[sanitizedBaseName] || sanitizedBaseName;
+
+            const renamedTextGrid = new File(
+                [file],
+                `${finalBaseName}.TextGrid`,
+                { type: file.type || 'text/plain' }
+            );
+
+            textgridFormData.append("textgridFile", renamedTextGrid);
+        }
+
+        if (textgridFiles.length > 0) {
+            const tgRes = await fetch("{{ URL_PREFIX + url_for('upload.upload_textgrid') }}", {
+                method: "POST",
+                body: textgridFormData
             });
 
-            document.getElementById('runButton').addEventListener('click', async () => {
-                const fileInput = document.getElementById('audioFile');
-                const files = Array.from(fileInput.files);
-                const formData = new FormData();
+            const tgData = await tgRes.json();
 
-                for (const file of files) {
-                    const ext = file.name.split('.').pop();
-                    let baseName = file.name.substring(0, file.name.lastIndexOf('.'));
-                    function sanitizeFileName(name) {
-                        return name
-                            .replace(/[^\w]/g, '_')        // Replace invalid characters with `_`
-                            .replace(/_+/g, '_')           // Merge consecutive `_`
-                            .replace(/^_+|_+$/g, '');      // Remove leading and trailing `_`
-                    }
-                    baseName = sanitizeFileName(baseName);
-                    let finalName = baseName;
-                    let override = false;
+            if (!tgRes.ok) {
+                alert(tgData.message || "TextGrid import failed!");
+                return;
+            }
 
-                    // Check for duplicate names
-                    const checkRes = await fetch(`{{URL_PREFIX}}/check_file_exists?username=${username}&videoName=${finalName}`);
-                    const { exists } = await checkRes.json();
+            if (tgData.failed && tgData.failed.length > 0) {
+                console.warn("Some TextGrid files failed:", tgData.failed);
+                alert("Some TextGrid files failed to import. Please check the matching annotation folders.");
+            }
+        }
 
-                    if (exists) {
-                        const confirmOverwrite = confirm(`File "${finalName}" already exists. Do you want to overwrite it? (previous annotation will be deleted)`);
-                        if (confirmOverwrite) {
-                            override = true;
-                        } else {
-                            // Automatically generate bark_2, bark_3, ... until a unique name is found
-                            let index = 2;
-                            while (true) {
-                                const newName = `${baseName}_${index}`;
-                                const check = await fetch(`{{URL_PREFIX}}/check_file_exists?username=${username}&videoName=${newName}`);
-                                const { exists: existsAlt } = await check.json();
-                                if (!existsAlt) {
-                                    finalName = newName;
-                                    break;
-                                }
-                                index++;
-                            }
-                        }
-                    }
-                    // Create a renamed File object
-                    const renamedFile = new File([file], `${finalName}.${ext}`, { type: file.type });
-                    // Add to FormData
-                    formData.append("audioFile", renamedFile);
-                    formData.append(`override_${finalName}`, override); // Let the backend identify whether the annotation subdirectory needs to be cleared
-                }
-                // Submit
-                const form = document.getElementById('runForm');
-                const action = form.getAttribute('action');
-                const res = await fetch(action, {
-                    method: 'POST',
-                    body: formData
-                });
-                if (res.ok) {
-                    window.location.reload();
-                } else {
-                    alert(" Upload failed！");
-                }
-            });
+        window.location.reload();
+
+    } catch (err) {
+        console.error("Upload failed:", err);
+        alert("Upload failed!");
+    }
+});
+
 
             document.getElementById('exportButton').addEventListener('click', async () => {
                 try {
@@ -657,5 +940,6 @@
         window.location.href = "{{ URL_PREFIX + url_for('login.login') }}";  // Redirect to login page if not logged in
     </script>
 {% endif %}
-</body>
-</html>
+{% endblock %}
+{#</body>#}
+{#</html>#}
